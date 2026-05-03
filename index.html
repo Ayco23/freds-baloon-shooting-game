@@ -257,12 +257,13 @@
   let lives = 5;
   let nextLifeThreshold = 100;
   const upgrade = { pierce: false, double: false, extra: false, bounce: false, sides: false, seek: false, freeze: false };
-  const combo2 = { firebolt: false, thunderguard: false, stormbolt: false };
+  const combo2 = { firebolt: false, thunderguard: false, stormbolt: false, freezeburn: false };
   let thunderTimer = 0;
   let freezeChance = 0.05;
   let freezeActive = false;
   let freezeTimer = 0;
   let freezeCooldown = 0;
+  let freezeFlash = 0;
   const FREEZE_UPGRADE = {
     key: 'freeze', icon: '❄️', name: 'Freeze',
     desc: 'Rare: every once in a while, every balloon on screen gets a frost layer that slows their movement.',
@@ -296,6 +297,7 @@
     { key: 'firebolt',     icon: '🔥⚡', name: 'Firebolt',     desc: 'Combined: pierce arrows tear through 2 layers of black/white balloons.', requires: ['pierce', 'bounce'] },
     { key: 'thunderguard', icon: '⚡🛡️', name: 'Thunderguard', desc: 'Combined: side arrows are replaced by auto-bolts that fire from the bottom every few seconds.', requires: ['bounce', 'sides'] },
     { key: 'stormbolt',    icon: '⚡🎯', name: 'Storm Bolt',   desc: 'Combined: lightning bounces reach twice as far and you get twice as many bounces.', requires: ['bounce', 'seek'] },
+    { key: 'freezeburn',   icon: '❄️🔥', name: 'Freezeburn',   desc: 'Combined: balloons hit but not destroyed are slowed by frost.', requires: ['freeze', 'pierce'] },
   ];
 
   const MODE_KEY = 'balloon_mode';
@@ -417,17 +419,18 @@
   }
 
   function scheduleOrangeBurst() {
-    const count = 2 + Math.floor(Math.random() * 4);
+    const heavy = score >= 3000;
+    const count = heavy ? 4 + Math.floor(Math.random() * 5) : 2 + Math.floor(Math.random() * 4);
     const side = Math.random() < 0.5 ? 'left' : 'right';
     const baseY = H * (0.65 + Math.random() * 0.10);
     for (let i = 0; i < count; i++) {
       orangeQueue.push({
-        delay: i * (0.30 + Math.random() * 0.15),
+        delay: i * (heavy ? 0.20 + Math.random() * 0.12 : 0.30 + Math.random() * 0.15),
         side,
         y: baseY + (Math.random() - 0.5) * 28,
       });
     }
-    orangeBurstTimer = 11 + Math.random() * 8;
+    orangeBurstTimer = heavy ? 6 + Math.random() * 5 : 11 + Math.random() * 8;
   }
 
   function shootArrow(angle, power) {
@@ -481,6 +484,7 @@
       spawnParticles(b.x, b.y, c.shine, b.color === 'white' ? 14 : 8);
       const text = b.color === 'white' ? 'peel!' : 'crack!';
       popups.push({ x: b.x, y: b.y - b.r, text, color: '#ffffff', life: 0.6, vy: -30 });
+      if (combo2.freezeburn) b.frozen = Math.max(b.frozen || 0, 4);
       return;
     }
     pop(b);
@@ -502,8 +506,10 @@
     popups.push({ x: b.x, y: b.y, text: '+' + c.points, color: c.fill, life: 0.9, vy: -40 });
     while (score >= nextLifeThreshold) {
       if (settings.purple) {
-        const rare = nextLifeThreshold > 1000;
-        if (!rare || Math.random() < 0.15) spawnBalloon('purple');
+        let chance = 1.0;
+        if (nextLifeThreshold > 3000) chance = 0.05;
+        else if (nextLifeThreshold > 1000) chance = 0.15;
+        if (Math.random() < chance) spawnBalloon('purple');
       }
       nextLifeThreshold += 100;
     }
@@ -630,9 +636,11 @@
       if (c.x - c.r > W + 30) c.x = -c.r - 30;
     }
 
-    const slow = freezeActive ? 0.3 : 1;
+    const globalSlow = freezeActive ? 0.3 : 1;
     for (const b of balloons) {
       if (b.hitFlash > 0) b.hitFlash = Math.max(0, b.hitFlash - dt);
+      if (b.frozen > 0) b.frozen = Math.max(0, b.frozen - dt);
+      const s = Math.min(globalSlow, b.frozen > 0 ? 0.4 : 1);
       if (b.color === 'orange') {
         b.life += dt;
         if (b.life > b.upDelay) {
@@ -640,14 +648,14 @@
           b.vy -= 70 * Math.pow(1.9, phase) * dt;
           b.vx *= Math.pow(0.5, dt);
         }
-        b.x += b.vx * dt * slow;
-        b.y += b.vy * dt * slow;
+        b.x += b.vx * dt * s;
+        b.y += b.vy * dt * s;
         if (b.y - b.r <= cloudY() + 10) escape(b);
         else if ((b.vx > 0 && b.x - b.r > W + 6) || (b.vx < 0 && b.x + b.r < -6)) escape(b);
       } else {
-        b.sway += b.swaySpeed * dt * slow;
+        b.sway += b.swaySpeed * dt * s;
         b.x = b.baseX + Math.sin(b.sway) * b.swayAmp;
-        b.y += b.vy * dt * slow;
+        b.y += b.vy * dt * s;
         if (b.y - b.r <= cloudY() + 10) escape(b);
       }
     }
@@ -684,10 +692,11 @@
         if (freezeCooldown <= 0) {
           freezeActive = true;
           freezeTimer = 3 + Math.random() * 1.5;
-          popups.push({ x: W / 2, y: H / 2, text: '❄ FROST ❄', color: '#cfeaff', life: 1.4, vy: -10 });
+          freezeFlash = 1;
         }
       }
     }
+    if (freezeFlash > 0) freezeFlash = Math.max(0, freezeFlash - dt * 1.6);
 
     for (const a of arrows) {
       if (a.seek && balloons.length) {
@@ -901,8 +910,8 @@
       ctx.fill();
       ctx.globalAlpha = 1;
     }
-    if (freezeActive) {
-      ctx.globalAlpha = 0.55;
+    if (freezeActive || b.frozen > 0) {
+      ctx.globalAlpha = freezeActive ? 0.55 : Math.min(0.7, b.frozen / 4);
       ctx.fillStyle = 'rgba(180,220,255,0.6)';
       ctx.beginPath();
       ctx.ellipse(0, 0, b.r * 0.95, b.r * 1.15, 0, 0, Math.PI * 2);
@@ -1071,6 +1080,23 @@
     drawClouds();
     drawBow();
 
+    if (freezeActive || freezeFlash > 0) {
+      const vignette = Math.max(freezeActive ? 0.18 : 0, freezeFlash * 0.5);
+      const grad = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.25, W / 2, H / 2, Math.max(W, H) * 0.7);
+      grad.addColorStop(0, 'rgba(180,220,255,0)');
+      grad.addColorStop(1, 'rgba(180,220,255,' + vignette.toFixed(3) + ')');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, W, H);
+      if (freezeFlash > 0) {
+        ctx.globalAlpha = freezeFlash;
+        ctx.strokeStyle = 'rgba(220,240,255,0.9)';
+        ctx.lineWidth = 6;
+        const inset = 10 + (1 - freezeFlash) * 14;
+        ctx.strokeRect(inset, inset, W - inset * 2, H - inset * 2);
+        ctx.globalAlpha = 1;
+      }
+    }
+
     for (const p of popups) {
       ctx.globalAlpha = Math.max(0, Math.min(1, p.life));
       ctx.fillStyle = p.color;
@@ -1140,12 +1166,13 @@
     nextLifeThreshold = 100;
     upgrade.pierce = upgrade.double = upgrade.extra = upgrade.bounce = false;
     upgrade.sides = upgrade.seek = upgrade.freeze = false;
-    combo2.firebolt = combo2.thunderguard = combo2.stormbolt = false;
+    combo2.firebolt = combo2.thunderguard = combo2.stormbolt = combo2.freezeburn = false;
     thunderTimer = 0;
     freezeChance = 0.05;
     freezeActive = false;
     freezeTimer = 0;
     freezeCooldown = 0;
+    freezeFlash = 0;
     tiersOffered = 0;
     whiteUnlocked = false;
     blackUnlocked = false;
