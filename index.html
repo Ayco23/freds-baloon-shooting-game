@@ -62,6 +62,25 @@
   .choice .icon { font-size: 30px; line-height: 1; }
   .choice .name { font-weight: 700; font-size: 15px; }
   .choice .desc { font-size: 12px; opacity: 0.85; line-height: 1.35; }
+  .settings { display: flex; flex-direction: column; gap: 10px; margin: 14px 0 4px; width: 260px; }
+  .toggle {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 10px 14px; border-radius: 12px;
+    background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.18);
+    font-size: 14px; cursor: pointer; user-select: none;
+  }
+  .toggle .label { font-weight: 600; }
+  .toggle .switch {
+    width: 42px; height: 24px; border-radius: 999px;
+    background: rgba(255,255,255,0.18); position: relative; transition: background 0.15s;
+  }
+  .toggle .switch::after {
+    content: ''; position: absolute; top: 2px; left: 2px;
+    width: 20px; height: 20px; border-radius: 50%; background: #fff;
+    transition: left 0.15s;
+  }
+  .toggle.on .switch { background: #3fbf52; }
+  .toggle.on .switch::after { left: 20px; }
   #hint {
     position: absolute; bottom: env(safe-area-inset-bottom, 12px); left: 0; right: 0;
     text-align: center; color: rgba(255,255,255,0.75); font-size: 13px;
@@ -90,7 +109,11 @@
   </div>
   <p>Drag anywhere on the screen to aim your bow.<br/>Release to fire an arrow.</p>
   <p>If a balloon escapes into the clouds, you lose its points!</p>
-  <p>Every 100 points a purple balloon appears — pop it to gain a life!</p>
+  <div class="settings">
+    <div class="toggle on" data-setting="black"><span class="label">Black balloons</span><span class="switch"></span></div>
+    <div class="toggle on" data-setting="purple"><span class="label">Purple balloons</span><span class="switch"></span></div>
+    <div class="toggle on" data-setting="upgrades"><span class="label">Upgrades at 100 pts</span><span class="switch"></span></div>
+  </div>
   <button id="startBtn">Start Game</button>
 </div>
 
@@ -160,8 +183,15 @@
     black:  { fill: '#2a2a2a', stroke: '#050505', shine: '#6b6b6b', points: 30, weight: 1, hp: 2 },
     purple: { fill: '#a64bff', stroke: '#4b148f', shine: '#f1d6ff', points: 0,  weight: 0, hp: 1, life: 1 },
   };
-  const WEIGHTED = [];
-  for (const k of Object.keys(COLORS)) for (let i = 0; i < COLORS[k].weight; i++) WEIGHTED.push(k);
+  let WEIGHTED = [];
+  function rebuildWeights() {
+    WEIGHTED = [];
+    for (const k of Object.keys(COLORS)) {
+      if (k === 'purple') continue;
+      if (k === 'black' && !settings.black) continue;
+      for (let i = 0; i < COLORS[k].weight; i++) WEIGHTED.push(k);
+    }
+  }
 
   let balloons = [];
   let arrows = [];
@@ -182,6 +212,20 @@
   let upgrade = 'none';
   let upgradeOffered = false;
   const MAX_LIVES = 9;
+
+  const SETTINGS_KEY = 'balloon_settings';
+  const settings = Object.assign(
+    { black: true, purple: true, upgrades: true },
+    JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}')
+  );
+  function saveSettings() {
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+  }
+  function applySettingsToUI() {
+    for (const t of document.querySelectorAll('#start .toggle')) {
+      t.classList.toggle('on', !!settings[t.dataset.setting]);
+    }
+  }
 
   let aiming = false;
   let aimStart = null;
@@ -281,10 +325,10 @@
     spawnParticles(b.x, b.y, c.fill, 18);
     popups.push({ x: b.x, y: b.y, text: '+' + c.points, color: c.fill, life: 0.9, vy: -40 });
     while (score >= nextLifeThreshold) {
-      spawnBalloon('purple');
+      if (settings.purple) spawnBalloon('purple');
       nextLifeThreshold += 100;
     }
-    if (!upgradeOffered && score >= 100) {
+    if (settings.upgrades && !upgradeOffered && score >= 100) {
       upgradeOffered = true;
       offerUpgrade();
     }
@@ -691,6 +735,7 @@
   canvas.addEventListener('mouseup', onEnd);
 
   function startGame() {
+    rebuildWeights();
     balloons = []; arrows = []; particles = []; popups = [];
     score = 0; combo = 0; comboTimer = 0; elapsed = 0;
     spawnTimer = 0.5; spawnInterval = 1.1; lives = 5;
@@ -720,6 +765,15 @@
   for (const el of upgradeOverlay.querySelectorAll('.choice')) {
     el.addEventListener('click', () => chooseUpgrade(el.dataset.choice));
   }
+  for (const t of document.querySelectorAll('#start .toggle')) {
+    t.addEventListener('click', () => {
+      const key = t.dataset.setting;
+      settings[key] = !settings[key];
+      t.classList.toggle('on', settings[key]);
+      saveSettings();
+    });
+  }
+  applySettingsToUI();
   bestEl.textContent = 'Best: ' + best;
 })();
 </script>
