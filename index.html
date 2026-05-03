@@ -71,11 +71,11 @@
   .choice.combined .name { color: #b6f5b6; }
   .choice.combined .desc { color: #d8f5d8; opacity: 1; }
   .choice.rare {
-    background: rgba(140,200,255,0.16); border-color: #8cd0ff;
-    box-shadow: 0 0 0 2px rgba(140,200,255,0.25), 0 4px 14px rgba(140,200,255,0.25);
+    background: rgba(166,75,255,0.20); border-color: #c89bff;
+    box-shadow: 0 0 0 2px rgba(166,75,255,0.30), 0 4px 14px rgba(166,75,255,0.30);
   }
-  .choice.rare .name { color: #d6ecff; }
-  .choice.rare .desc { color: #e6f3ff; opacity: 1; }
+  .choice.rare .name { color: #efdfff; }
+  .choice.rare .desc { color: #f5ebff; opacity: 1; }
   .settings { display: flex; flex-direction: column; gap: 10px; margin: 14px 0 4px; width: 280px; }
   .modes { display: flex; gap: 10px; width: 280px; margin: 14px 0 4px; }
   .mode {
@@ -275,7 +275,7 @@
     return 2000 + (tier - 6) * 800;
   }
   function anyUpgradeAvailable() {
-    const remaining = [...TIER1, ...TIER2, ...TIER3].filter(c => !upgrade[c.key]);
+    const remaining = BASE_POOL.filter(c => !upgrade[c.key]);
     const eligibleCombined = COMBINED.filter(c => !combo2[c.key] && c.requires.every(r => upgrade[r]));
     return (remaining.length + eligibleCombined.length) > 0;
   }
@@ -284,17 +284,13 @@
   let orangeQueue = [];
   const MAX_LIVES = 9;
 
-  const TIER1 = [
-    { key: 'pierce', icon: '🔥', name: 'Fire Arrows', desc: 'Arrows pierce through balloons — pop multiple in one shot.' },
-    { key: 'double', icon: '🏹🏹', name: 'Double Shot', desc: 'Each release fires two arrows in a tight spread.' },
-  ];
-  const TIER2 = [
-    { key: 'extra', icon: '➕🏹', name: 'Extra Arrow', desc: 'Adds one more arrow to every shot, stacks with Double Shot.' },
-    { key: 'bounce', icon: '⚡', name: 'Lightning Bounce', desc: 'Arrows ricochet off the walls and ceiling.' },
-  ];
-  const TIER3 = [
-    { key: 'sides', icon: '↔️', name: 'Side Arrows', desc: 'Each shot also fires two short-range arrows to the sides.' },
-    { key: 'seek', icon: '🎯', name: 'Seeking Darts', desc: 'Arrows gently steer toward the nearest balloon.' },
+  const BASE_POOL = [
+    { key: 'pierce', icon: '🔥',   name: 'Fire Arrows',      desc: 'Arrows pierce through balloons — pop multiple in one shot.' },
+    { key: 'double', icon: '➕🏹', name: 'Extra Arrow',      desc: 'Adds one more arrow to every shot. Stacks (max +2).' },
+    { key: 'extra',  icon: '➕🏹', name: 'Extra Arrow',      desc: 'Adds another arrow to every shot. Stacks (max +2).' },
+    { key: 'bounce', icon: '⚡',   name: 'Lightning Bounce', desc: 'Arrows ricochet off the walls and ceiling.' },
+    { key: 'sides',  icon: '↔️',   name: 'Side Arrows',      desc: 'Each shot also fires two short-range arrows to the sides.' },
+    { key: 'seek',   icon: '🎯',   name: 'Seeking Darts',    desc: 'Arrows gently steer toward the nearest balloon.' },
   ];
   const COMBINED = [
     { key: 'firebolt',     icon: '🔥⚡', name: 'Firebolt',     desc: 'Combined: pierce arrows tear through 2 layers of black/white balloons.', requires: ['pierce', 'bounce'] },
@@ -538,11 +534,12 @@
 
   function offerUpgrade(tier) {
     running = false;
-    let base;
-    if (tier === 1) base = TIER1.slice();
-    else if (tier === 2) base = TIER2.slice();
-    else if (tier === 3) base = TIER3.slice();
-    else base = [...TIER1, ...TIER2, ...TIER3].filter(c => !upgrade[c.key]);
+    const unowned = BASE_POOL.filter(c => !upgrade[c.key]);
+    for (let i = unowned.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [unowned[i], unowned[j]] = [unowned[j], unowned[i]];
+    }
+    const base = unowned.slice(0, Math.min(2, unowned.length));
     if (!upgrade.freeze && base.length > 0 && Math.random() < freezeChance) {
       const idx = Math.floor(Math.random() * base.length);
       base[idx] = FREEZE_UPGRADE;
@@ -550,8 +547,8 @@
     const eligibleCombined = COMBINED
       .filter(c => !combo2[c.key] && c.requires.every(r => upgrade[r]))
       .map(c => Object.assign({ combined: true }, c));
-    const choices = [...base, ...eligibleCombined];
-    if (tier >= 4 && choices.length === 0) {
+    const choices = [...eligibleCombined, ...base];
+    if (choices.length === 0) {
       running = true; last = 0;
       return;
     }
