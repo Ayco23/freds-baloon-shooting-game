@@ -412,7 +412,10 @@
     spawnParticles(b.x, b.y, c.fill, 18);
     popups.push({ x: b.x, y: b.y, text: '+' + c.points, color: c.fill, life: 0.9, vy: -40 });
     while (score >= nextLifeThreshold) {
-      if (settings.purple) spawnBalloon('purple');
+      if (settings.purple) {
+        const rare = nextLifeThreshold > 1000;
+        if (!rare || Math.random() < 0.15) spawnBalloon('purple');
+      }
       nextLifeThreshold += 100;
     }
     if (settings.black && !blackUnlocked && score >= 250) {
