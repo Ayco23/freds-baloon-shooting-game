@@ -231,12 +231,14 @@
   let WEIGHTED = [];
   let whiteUnlocked = false;
   let blackUnlocked = false;
+  let greenRemoved = false;
   function rebuildWeights() {
     WEIGHTED = [];
     for (const k of Object.keys(COLORS)) {
       if (k === 'purple') continue;
       if (k === 'black' && (!settings.black || !blackUnlocked)) continue;
       if (k === 'white' && (!settings.white || !whiteUnlocked)) continue;
+      if (k === 'green' && greenRemoved) continue;
       for (let i = 0; i < COLORS[k].weight; i++) WEIGHTED.push(k);
     }
   }
@@ -556,6 +558,10 @@
       whiteUnlocked = true;
       rebuildWeights();
       popups.push({ x: W / 2, y: H / 2, text: 'WHITE BALLOONS UNLOCKED', color: '#ffffff', life: 1.6, vy: -10 });
+    }
+    if (!greenRemoved && score >= 3000) {
+      greenRemoved = true;
+      rebuildWeights();
     }
     if (settings.orange && !orangeUnlocked && score >= 1400) {
       orangeUnlocked = true;
@@ -1249,6 +1255,7 @@
     tiersOffered = 0;
     whiteUnlocked = false;
     blackUnlocked = false;
+    greenRemoved = false;
     orangeUnlocked = false;
     orangeBurstTimer = 0;
     orangeQueue = [];
