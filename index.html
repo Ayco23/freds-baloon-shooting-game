@@ -138,7 +138,7 @@
     <div><span class="swatch blue"></span><span>Blue · 10</span></div>
     <div><span class="swatch green"></span><span>Green · 5</span></div>
     <div><span class="swatch black"></span><span>Black · 30 (2 hits, 250+)</span></div>
-    <div><span class="swatch white"></span><span>White · 60 (4 hits, 300+)</span></div>
+    <div><span class="swatch white"></span><span>White · 60 (4 hits, 625+)</span></div>
     <div><span class="swatch purple"></span><span>Purple · +1 ❤</span></div>
   </div>
   <p>Drag anywhere on the screen to aim your bow.<br/>Release to fire an arrow.</p>
@@ -419,7 +419,7 @@
       rebuildWeights();
       popups.push({ x: W / 2, y: H / 2, text: 'BLACK BALLOONS UNLOCKED', color: '#ffffff', life: 1.6, vy: -10 });
     }
-    if (settings.white && !whiteUnlocked && score >= 300) {
+    if (settings.white && !whiteUnlocked && score >= 625) {
       whiteUnlocked = true;
       rebuildWeights();
       popups.push({ x: W / 2, y: H / 2, text: 'WHITE BALLOONS UNLOCKED', color: '#ffffff', life: 1.6, vy: -10 });
