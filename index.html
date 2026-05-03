@@ -357,7 +357,8 @@
       x, y, baseX: x, r, color: 'orange',
       vx: side === 'left' ? speed : -speed, vy: 0,
       sway: 0, swaySpeed: 0, swayAmp: 0,
-      hp: 1, hitFlash: 0, alive: true, horizontal: true,
+      hp: 1, hitFlash: 0, alive: true,
+      life: 0, upDelay: 0.85 + Math.random() * 0.4,
     });
   }
 
@@ -575,9 +576,17 @@
 
     for (const b of balloons) {
       if (b.hitFlash > 0) b.hitFlash = Math.max(0, b.hitFlash - dt);
-      if (b.horizontal) {
+      if (b.color === 'orange') {
+        b.life += dt;
+        if (b.life > b.upDelay) {
+          const phase = b.life - b.upDelay;
+          b.vy -= 70 * Math.pow(1.9, phase) * dt;
+          b.vx *= Math.pow(0.5, dt);
+        }
         b.x += b.vx * dt;
-        if ((b.vx > 0 && b.x - b.r > W + 6) || (b.vx < 0 && b.x + b.r < -6)) escape(b);
+        b.y += b.vy * dt;
+        if (b.y - b.r <= cloudY() + 10) escape(b);
+        else if ((b.vx > 0 && b.x - b.r > W + 6) || (b.vx < 0 && b.x + b.r < -6)) escape(b);
       } else {
         b.sway += b.swaySpeed * dt;
         b.x = b.baseX + Math.sin(b.sway) * b.swayAmp;
