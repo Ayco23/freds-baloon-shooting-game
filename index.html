@@ -265,7 +265,7 @@
   let lives = 5;
   let nextLifeThreshold = 100;
   const upgrade = { pierce: false, double: false, extra: false, bounce: false, sides: false, seek: false, freeze: false, random: false };
-  const combo2 = { firebolt: false, thunderguard: false, stormbolt: false, freezeburn: false, firework: false, icefumer: false };
+  const combo2 = { firebolt: false, thunderguard: false, stormbolt: false, freezeburn: false, firework: false, icefumer: false, chainlightning: false, twinhunters: false, wildlightning: false, pinball: false, ghostvolley: false };
   let iceFumes = [];
   let thunderTimer = 0;
   let freezeChance = 0.10;
@@ -292,7 +292,7 @@
     const remaining = BASE_POOL.filter(c => !upgrade[c.key] && !(upgrade.random && c.key === 'seek'));
     const rares = (!upgrade.freeze ? 1 : 0) + ((!upgrade.random && !upgrade.seek) ? 1 : 0);
     const eligibleCombined = COMBINED
-      .filter(c => !combo2[c.key] && c.requires.every(r => upgrade[r]))
+      .filter(c => !combo2[c.key] && c.requires.every(r => upgrade[r]) && (!c.requiresAny || c.requiresAny.some(r => upgrade[r])))
       .filter(c => !c.conflicts || !c.conflicts.some(k => combo2[k]));
     return (remaining.length + rares + eligibleCombined.length) > 0;
   }
@@ -316,6 +316,11 @@
     { key: 'freezeburn',   icon: '❄️🔥', name: 'Freezeburn',   desc: 'Combined: balloons hit but not destroyed are slowed by frost.', requires: ['freeze', 'pierce'] },
     { key: 'firework',     icon: '🎆',   name: 'Firework Bolts', desc: 'Combined: bow shoots fireworks that explode on impact, damaging nearby balloons.', requires: ['random', 'pierce'] },
     { key: 'icefumer',     icon: '❄️🌫️', name: 'Ice Fumer',       desc: 'Combined: side arrows are replaced by drifting ice fumes from each side that briefly freeze balloons they touch.', requires: ['freeze', 'sides'], conflicts: ['thunderguard'] },
+    { key: 'chainlightning', icon: '⛓️⚡', name: 'Chain Lightning', desc: 'Combined: bouncing arrows instantly retarget the closest other balloon on every hit (up to 4 chains).', requires: ['bounce', 'seek'] },
+    { key: 'twinhunters',  icon: '🎯🎯', name: 'Twin Hunters',  desc: 'Combined: each arrow seeks a different target instead of all chasing the closest one.', requires: ['seek'], requiresAny: ['double', 'extra'] },
+    { key: 'wildlightning', icon: '⚡💃', name: 'Wild Lightning', desc: 'Combined: bounces randomly redirect along the dance curve, often returning into the play area.', requires: ['bounce', 'random'] },
+    { key: 'pinball',      icon: '💃↔️', name: 'Pinball',       desc: 'Combined: side arrows wobble and ricochet off the screen edges before fading.', requires: ['sides', 'random'] },
+    { key: 'ghostvolley',  icon: '💃➕🏹', name: 'Ghost Volley',  desc: 'Combined: each arrow takes a wider, independent random curve, fanning the dance pattern.', requires: ['random'], requiresAny: ['double', 'extra'] },
   ];
 
   const MODE_KEY = 'balloon_mode';
@@ -494,7 +499,8 @@
   function shootArrow(angle, power) {
     const speed = 700 + power * 600;
     let count = 1 + (upgrade.double ? 1 : 0) + (upgrade.extra ? 1 : 0);
-    const spread = 0.09;
+    const spread = 0.09 * (combo2.ghostvolley ? 2.2 : 1);
+    const curveBase = combo2.ghostvolley ? 5 : 3;
     const angles = [];
     if (count === 1) {
       angles.push(angle);
@@ -504,7 +510,16 @@
         angles.push(angle + t * spread * (count - 1) * 0.6);
       }
     }
-    for (const a of angles) {
+    let twinTargets = null;
+    if (combo2.twinhunters && upgrade.seek) {
+      twinTargets = balloons.filter(b => b.alive).sort((b1, b2) => {
+        const d1 = Math.hypot(b1.x - bow.x, b1.y - bow.y);
+        const d2 = Math.hypot(b2.x - bow.x, b2.y - bow.y);
+        return d1 - d2;
+      });
+    }
+    for (let i = 0; i < angles.length; i++) {
+      const a = angles[i];
       arrows.push({
         x: bow.x, y: bow.y - 20,
         vx: Math.cos(a) * speed,
@@ -514,7 +529,9 @@
         seek: upgrade.seek,
         random: upgrade.random,
         firework: combo2.firework,
-        curvature: upgrade.random ? (Math.random() - 0.5) * 3 : 0,
+        curvature: upgrade.random ? (Math.random() - 0.5) * curveBase : 0,
+        target: twinTargets ? twinTargets[i] || null : null,
+        chains: 0,
         hits: new Set(), trail: [],
       });
     }
@@ -526,9 +543,12 @@
           x: bow.x, y: bow.y - 20,
           vx: Math.cos(a) * sideSpeed,
           vy: Math.sin(a) * sideSpeed,
-          angle: a, alive: true, life: 0.45,
-          fire: upgrade.pierce, bounce: false, bounces: 0,
+          angle: a, alive: true, life: combo2.pinball ? 0.85 : 0.45,
+          fire: upgrade.pierce, bounce: !!combo2.pinball, bounces: 0,
           seek: false, side: true,
+          random: !!combo2.pinball,
+          curvature: combo2.pinball ? (Math.random() - 0.5) * 3 : 0,
+          chains: 0,
           hits: new Set(), trail: [],
         });
       }
@@ -632,7 +652,7 @@
       base[idx] = rare;
     }
     const eligibleCombined = COMBINED
-      .filter(c => !combo2[c.key] && c.requires.every(r => upgrade[r]))
+      .filter(c => !combo2[c.key] && c.requires.every(r => upgrade[r]) && (!c.requiresAny || c.requiresAny.some(r => upgrade[r])))
       .filter(c => !c.conflicts || !c.conflicts.some(k => combo2[k]))
       .map(c => Object.assign({ combined: true }, c));
     const choices = [...eligibleCombined, ...base];
@@ -812,12 +832,15 @@
         a.vy = Math.sin(ang) * sp;
       }
       if (a.seek && balloons.length) {
-        let nearest = null, nd = Infinity;
-        for (const b of balloons) {
-          if (!b.alive || a.hits.has(b)) continue;
-          const ddx = b.x - a.x, ddy = b.y - a.y;
-          const d2 = ddx * ddx + ddy * ddy;
-          if (d2 < nd) { nd = d2; nearest = b; }
+        let nearest = a.target && a.target.alive && !a.hits.has(a.target) ? a.target : null;
+        if (!nearest) {
+          let nd = Infinity;
+          for (const b of balloons) {
+            if (!b.alive || a.hits.has(b)) continue;
+            const ddx = b.x - a.x, ddy = b.y - a.y;
+            const d2 = ddx * ddx + ddy * ddy;
+            if (d2 < nd) { nd = d2; nearest = b; }
+          }
         }
         if (nearest) {
           const sp = Math.hypot(a.vx, a.vy);
@@ -853,6 +876,12 @@
           a.bounces++;
           a.hits = new Set();
           a.dieAtDist = a.dist * (combo2.stormbolt ? 1.4 : 1.2);
+          if (combo2.wildlightning) {
+            const sp = Math.hypot(a.vx, a.vy);
+            const ang = Math.atan2(a.vy, a.vx) + (Math.random() - 0.5) * Math.PI * 0.7;
+            a.vx = Math.cos(ang) * sp;
+            a.vy = Math.sin(ang) * sp;
+          }
         }
         if (a.dieAtDist && a.dist >= a.dieAtDist) a.alive = false;
         if (a.bounces > (combo2.stormbolt ? 10 : 5)) a.alive = false;
@@ -871,7 +900,27 @@
           } else {
             hit(b, a);
             a.hits.add(b);
-            if (!a.fire) a.alive = false;
+            if (combo2.chainlightning && a.bounce && (a.chains || 0) < 4) {
+              let next = null, nd = Infinity;
+              for (const ob of balloons) {
+                if (!ob.alive || a.hits.has(ob)) continue;
+                const odx = ob.x - a.x, ody = ob.y - a.y;
+                const od2 = odx * odx + ody * ody;
+                if (od2 < nd) { nd = od2; next = ob; }
+              }
+              if (next) {
+                const sp = Math.hypot(a.vx, a.vy);
+                const tx = next.x - a.x, ty = next.y - a.y;
+                const td = Math.hypot(tx, ty) || 1;
+                a.vx = tx / td * sp;
+                a.vy = ty / td * sp;
+                a.chains = (a.chains || 0) + 1;
+              } else if (!a.fire) {
+                a.alive = false;
+              }
+            } else if (!a.fire) {
+              a.alive = false;
+            }
           }
         }
       }
@@ -1299,6 +1348,7 @@
     upgrade.pierce = upgrade.double = upgrade.extra = upgrade.bounce = false;
     upgrade.sides = upgrade.seek = upgrade.freeze = upgrade.random = false;
     combo2.firebolt = combo2.thunderguard = combo2.stormbolt = combo2.freezeburn = combo2.firework = combo2.icefumer = false;
+    combo2.chainlightning = combo2.twinhunters = combo2.wildlightning = combo2.pinball = combo2.ghostvolley = false;
     thunderTimer = 0;
     iceFumes = [];
     freezeChance = 0.10;
