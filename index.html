@@ -14,7 +14,7 @@
     user-select: none; -webkit-user-select: none; touch-action: none;
     overscroll-behavior: none;
   }
-  #game { display: block; width: 100vw; height: 100vh; touch-action: none; }
+  #game { display: block; position: fixed; top: 0; left: 0; touch-action: none; }
   #ui {
     position: absolute; top: env(safe-area-inset-top, 12px); left: 0; right: 0;
     display: flex; justify-content: space-between; align-items: center;
@@ -107,9 +107,10 @@
   let W = 0, H = 0;
   function resize() {
     DPR = Math.min(window.devicePixelRatio || 1, 2);
-    const vv = window.visualViewport;
-    W = Math.round(vv ? vv.width : window.innerWidth);
-    H = Math.round(vv ? vv.height : window.innerHeight);
+    W = window.innerWidth || document.documentElement.clientWidth;
+    H = window.innerHeight || document.documentElement.clientHeight;
+    document.documentElement.style.height = H + 'px';
+    document.body.style.height = H + 'px';
     canvas.width = Math.floor(W * DPR);
     canvas.height = Math.floor(H * DPR);
     canvas.style.width = W + 'px';
@@ -119,10 +120,7 @@
     makeClouds();
   }
   window.addEventListener('resize', resize);
-  window.addEventListener('orientationchange', resize);
-  if (window.visualViewport) {
-    window.visualViewport.addEventListener('resize', resize);
-  }
+  window.addEventListener('orientationchange', () => setTimeout(resize, 150));
 
   const COLORS = {
     gold:   { fill: '#f5c518', stroke: '#9c7a04', shine: '#fff7c4', points: 20, weight: 1 },
