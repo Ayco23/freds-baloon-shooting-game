@@ -44,6 +44,7 @@
   .purple { background: radial-gradient(circle at 35% 30%, #f1d6ff, #a64bff 60%, #4b148f); }
   .black  { background: radial-gradient(circle at 35% 30%, #6b6b6b, #2a2a2a 60%, #050505); }
   .white  { background: radial-gradient(circle at 35% 30%, #ffffff, #e8e8e8 60%, #b3b3b3); }
+  .metal  { background: radial-gradient(circle at 35% 30%, #e6e8eb, #a6acaf 55%, #2c3033); }
   .orange { background: radial-gradient(circle at 35% 30%, #ffd9a8, #ff8a1a 60%, #a14b00); }
   button {
     margin-top: 18px; font-size: 18px; font-weight: 700; padding: 14px 28px;
@@ -152,6 +153,7 @@
     <div><span class="swatch green"></span><span>Green · 5</span></div>
     <div><span class="swatch black"></span><span>Black · 30 (2 hits, 200+)</span></div>
     <div><span class="swatch white"></span><span>White · 60 (4 hits, 800+)</span></div>
+    <div><span class="swatch metal"></span><span>Metal · 100 (fire only, late game)</span></div>
     <div><span class="swatch orange"></span><span>Orange · 25 (side bursts, 1300+)</span></div>
     <div><span class="swatch purple"></span><span>Purple · +1 ❤</span></div>
   </div>
@@ -225,19 +227,23 @@
     green:  { fill: '#3fbf52', stroke: '#1f6b2a', shine: '#d4f5cf', points: 5,  weight: 6, hp: 1 },
     black:  { fill: '#2a2a2a', stroke: '#050505', shine: '#6b6b6b', points: 30, weight: 2, hp: 2 },
     white:  { fill: '#ffffff', stroke: '#9aa0a6', shine: '#f3f6ff', points: 60, weight: 3, hp: 4 },
+    metal:  { fill: '#a6acaf', stroke: '#2c3033', shine: '#e6e8eb', points: 100, weight: 1, hp: 1 },
     orange: { fill: '#ff8a1a', stroke: '#a14b00', shine: '#ffd9a8', points: 25, weight: 0, hp: 1 },
     purple: { fill: '#a64bff', stroke: '#4b148f', shine: '#f1d6ff', points: 0,  weight: 0, hp: 1, life: 1 },
   };
   let WEIGHTED = [];
   let whiteUnlocked = false;
   let blackUnlocked = false;
+  let metalUnlocked = false;
   let greenRemoved = false;
   function rebuildWeights() {
     WEIGHTED = [];
     for (const k of Object.keys(COLORS)) {
       if (k === 'purple') continue;
+      if (k === 'orange') continue;
       if (k === 'black' && (!settings.black || !blackUnlocked)) continue;
       if (k === 'white' && (!settings.white || !whiteUnlocked)) continue;
+      if (k === 'metal' && (!settings.metal || !metalUnlocked)) continue;
       if (k === 'green' && greenRemoved) continue;
       for (let i = 0; i < COLORS[k].weight; i++) WEIGHTED.push(k);
     }
@@ -316,8 +322,8 @@
   const MODE_KEY = 'balloon_mode';
   let mode = localStorage.getItem(MODE_KEY) === 'modded' ? 'modded' : 'original';
   const MODE_FLAGS = {
-    original: { black: false, white: false, orange: false, purple: true, upgrades: false },
-    modded:   { black: true,  white: true,  orange: true,  purple: true, upgrades: true  },
+    original: { black: false, white: false, orange: false, metal: false, purple: true, upgrades: false },
+    modded:   { black: true,  white: true,  orange: true,  metal: true,  purple: true, upgrades: true  },
   };
   const settings = Object.assign({}, MODE_FLAGS[mode]);
   const BEST_KEYS = { original: 'balloon_best_original', modded: 'balloon_best_modded' };
@@ -371,6 +377,7 @@
             : key === 'purple' ? 22
             : key === 'black' ? 28
             : key === 'white' ? 32
+            : key === 'metal' ? 26
             : 26;
     const x = 30 + Math.random() * (W - 60);
     const y = H + r + 30;
@@ -380,6 +387,7 @@
                    : key === 'purple' ? 1.25
                    : key === 'black' ? 0.85
                    : key === 'white' ? 0.75
+                   : key === 'metal' ? 0.45
                    : 0.9;
     const speed = baseSpeed * speedMul + Math.random() * 20;
     balloons.push({
@@ -529,6 +537,12 @@
   }
 
   function hit(b, a) {
+    if (b.color === 'metal' && (!a || !a.fire)) {
+      b.hitFlash = 0.25;
+      spawnParticles(b.x, b.y, '#cccccc', 4);
+      popups.push({ x: b.x, y: b.y - b.r, text: 'clang!', color: '#cccccc', life: 0.5, vy: -30 });
+      return;
+    }
     const dmg = (a && combo2.firebolt && a.fire && a.bounce && b.hp > 1) ? 2 : 1;
     b.hp -= dmg;
     if (b.hp > 0) {
@@ -576,6 +590,11 @@
       whiteUnlocked = true;
       rebuildWeights();
       popups.push({ x: W / 2, y: H / 2, text: 'WHITE BALLOONS UNLOCKED', color: '#ffffff', life: 1.6, vy: -10 });
+    }
+    if (settings.metal && !metalUnlocked && tiersOffered >= 4) {
+      metalUnlocked = true;
+      rebuildWeights();
+      popups.push({ x: W / 2, y: H / 2, text: 'METAL BALLOONS APPEAR', color: '#cccccc', life: 1.6, vy: -10 });
     }
     if (!greenRemoved && score >= 3000) {
       greenRemoved = true;
@@ -1305,6 +1324,7 @@
     tiersOffered = 0;
     whiteUnlocked = false;
     blackUnlocked = false;
+    metalUnlocked = false;
     greenRemoved = false;
     orangeUnlocked = false;
     orangeBurstTimer = 0;
