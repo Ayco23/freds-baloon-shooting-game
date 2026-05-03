@@ -272,7 +272,6 @@
   let freezeActive = false;
   let freezeTimer = 0;
   let freezeCooldown = 0;
-  let freezeFlash = 0;
   const FREEZE_UPGRADE = {
     key: 'freeze', icon: '❄️', name: 'Freeze',
     desc: 'Rare: every once in a while, every balloon on screen gets a frost layer that slows their movement.',
@@ -772,13 +771,17 @@
       f.life -= dt;
       f.r += 24 * dt;
       if (f.life <= 0) { iceFumes.splice(i, 1); continue; }
+      let hitB = null;
       for (const b of balloons) {
         if (!b.alive) continue;
         const dx = f.x - b.x, dy = f.y - b.y;
         const rr = (f.r + b.r);
-        if (dx * dx + dy * dy < rr * rr) {
-          b.frozen = Math.max(b.frozen || 0, 2.5);
-        }
+        if (dx * dx + dy * dy < rr * rr) { hitB = b; break; }
+      }
+      if (hitB) {
+        hitB.frozen = Math.max(hitB.frozen || 0, 2.5);
+        spawnParticles(f.x, f.y, '#cfeaff', 6);
+        iceFumes.splice(i, 1);
       }
     }
 
@@ -794,11 +797,9 @@
         if (freezeCooldown <= 0) {
           freezeActive = true;
           freezeTimer = 3 + Math.random() * 1.5;
-          freezeFlash = 1;
         }
       }
     }
-    if (freezeFlash > 0) freezeFlash = Math.max(0, freezeFlash - dt * 1.6);
 
     for (const a of arrows) {
       if (a.random && !a.thunder) {
@@ -1227,23 +1228,6 @@
     drawClouds();
     drawBow();
 
-    if (freezeActive || freezeFlash > 0) {
-      const vignette = Math.max(freezeActive ? 0.18 : 0, freezeFlash * 0.5);
-      const grad = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.25, W / 2, H / 2, Math.max(W, H) * 0.7);
-      grad.addColorStop(0, 'rgba(180,220,255,0)');
-      grad.addColorStop(1, 'rgba(180,220,255,' + vignette.toFixed(3) + ')');
-      ctx.fillStyle = grad;
-      ctx.fillRect(0, 0, W, H);
-      if (freezeFlash > 0) {
-        ctx.globalAlpha = freezeFlash;
-        ctx.strokeStyle = 'rgba(220,240,255,0.9)';
-        ctx.lineWidth = 6;
-        const inset = 10 + (1 - freezeFlash) * 14;
-        ctx.strokeRect(inset, inset, W - inset * 2, H - inset * 2);
-        ctx.globalAlpha = 1;
-      }
-    }
-
     for (const p of popups) {
       ctx.globalAlpha = Math.max(0, Math.min(1, p.life));
       ctx.fillStyle = p.color;
@@ -1320,7 +1304,6 @@
     freezeActive = false;
     freezeTimer = 0;
     freezeCooldown = 0;
-    freezeFlash = 0;
     tiersOffered = 0;
     whiteUnlocked = false;
     blackUnlocked = false;
