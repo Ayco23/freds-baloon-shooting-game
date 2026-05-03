@@ -260,7 +260,6 @@
   let nextLifeThreshold = 100;
   const upgrade = { pierce: false, double: false, extra: false, bounce: false, sides: false, seek: false, freeze: false, random: false };
   const combo2 = { firebolt: false, thunderguard: false, stormbolt: false, freezeburn: false, firework: false, icefumer: false };
-  let iceFumeTimer = 0;
   let iceFumes = [];
   let thunderTimer = 0;
   let freezeChance = 0.10;
@@ -408,18 +407,15 @@
     });
   }
 
-  function spawnIceFume() {
-    const sides = [];
-    if (Math.random() < 0.7) sides.push('left');
-    if (Math.random() < 0.7 || sides.length === 0) sides.push('right');
-    for (const side of sides) {
-      const y = H * 0.32 + Math.random() * H * 0.42;
+  function spawnIceFumesFromBow() {
+    for (const dir of [-1, 1]) {
       iceFumes.push({
-        x: side === 'left' ? -30 : W + 30,
-        y,
-        vx: side === 'left' ? 230 : -230,
-        life: 1.6,
-        r: 28,
+        x: bow.x + dir * 28,
+        y: bow.y - 10,
+        vx: dir * 320,
+        vy: -100,
+        life: 1.2,
+        r: 18,
       });
     }
   }
@@ -529,6 +525,7 @@
         });
       }
     }
+    if (combo2.icefumer) spawnIceFumesFromBow();
   }
 
   function hit(b, a) {
@@ -747,18 +744,14 @@
       }
     }
 
-    if (combo2.icefumer) {
-      iceFumeTimer -= dt;
-      if (iceFumeTimer <= 0) {
-        spawnIceFume();
-        iceFumeTimer = 1.6 + Math.random() * 1.0;
-      }
-    }
     for (let i = iceFumes.length - 1; i >= 0; i--) {
       const f = iceFumes[i];
       f.x += f.vx * dt;
+      f.y += f.vy * dt;
+      f.vx *= Math.pow(0.4, dt);
+      f.vy *= Math.pow(0.4, dt);
       f.life -= dt;
-      f.r += 14 * dt;
+      f.r += 24 * dt;
       if (f.life <= 0) { iceFumes.splice(i, 1); continue; }
       for (const b of balloons) {
         if (!b.alive) continue;
@@ -1303,7 +1296,6 @@
     upgrade.sides = upgrade.seek = upgrade.freeze = upgrade.random = false;
     combo2.firebolt = combo2.thunderguard = combo2.stormbolt = combo2.freezeburn = combo2.firework = combo2.icefumer = false;
     thunderTimer = 0;
-    iceFumeTimer = 0;
     iceFumes = [];
     freezeChance = 0.10;
     freezeActive = false;
