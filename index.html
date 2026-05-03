@@ -64,6 +64,12 @@
   .choice .icon { font-size: 30px; line-height: 1; }
   .choice .name { font-weight: 700; font-size: 15px; }
   .choice .desc { font-size: 12px; opacity: 0.85; line-height: 1.35; }
+  .choice.combined {
+    background: rgba(63,191,82,0.18); border-color: #3fbf52;
+    box-shadow: 0 0 0 2px rgba(63,191,82,0.25), 0 4px 14px rgba(63,191,82,0.25);
+  }
+  .choice.combined .name { color: #b6f5b6; }
+  .choice.combined .desc { color: #d8f5d8; opacity: 1; }
   .settings { display: flex; flex-direction: column; gap: 10px; margin: 14px 0 4px; width: 280px; }
   .modes { display: flex; gap: 10px; width: 280px; margin: 14px 0 4px; }
   .mode {
@@ -269,6 +275,11 @@
   const TIER3 = [
     { key: 'sides', icon: '↔️', name: 'Side Arrows', desc: 'Each shot also fires two short-range arrows to the sides.' },
     { key: 'seek', icon: '🎯', name: 'Seeking Darts', desc: 'Arrows gently steer toward the nearest balloon.' },
+  ];
+  const COMBINED = [
+    { key: 'firebolt',     icon: '🔥⚡', name: 'Firebolt',     desc: 'Combined: pierce arrows tear through 2 layers of black/white balloons.', requires: ['pierce', 'bounce'] },
+    { key: 'thunderguard', icon: '⚡🛡️', name: 'Thunderguard', desc: 'Combined: side arrows are replaced by auto-bolts that fire from the bottom every few seconds.', requires: ['bounce', 'sides'] },
+    { key: 'stormbolt',    icon: '⚡🎯', name: 'Storm Bolt',   desc: 'Combined: lightning bounces reach twice as far and you get twice as many bounces.', requires: ['bounce', 'seek'] },
   ];
 
   const MODE_KEY = 'balloon_mode';
@@ -524,7 +535,13 @@
     if (tier === 1) choices = TIER1;
     else if (tier === 2) choices = TIER2;
     else if (tier === 3) choices = TIER3;
-    else choices = [...TIER1, ...TIER2, ...TIER3].filter(c => !upgrade[c.key]);
+    else {
+      const remaining = [...TIER1, ...TIER2, ...TIER3].filter(c => !upgrade[c.key]);
+      const eligibleCombined = COMBINED
+        .filter(c => !combo2[c.key] && c.requires.every(r => upgrade[r]))
+        .map(c => Object.assign({ combined: true }, c));
+      choices = [...remaining, ...eligibleCombined];
+    }
     if (tier >= 4 && choices.length === 0) {
       running = true; last = 0;
       return;
@@ -535,7 +552,7 @@
     upgradeChoicesEl.innerHTML = '';
     for (const c of choices) {
       const el = document.createElement('div');
-      el.className = 'choice';
+      el.className = 'choice' + (c.combined ? ' combined' : '');
       el.dataset.choice = c.key;
       el.innerHTML =
         '<div class="icon">' + c.icon + '</div>' +
@@ -548,27 +565,15 @@
   }
 
   function chooseUpgrade(key) {
-    upgrade[key] = true;
-    checkCombinedUpgrades();
+    if (combo2.hasOwnProperty(key)) {
+      combo2[key] = true;
+      if (key === 'thunderguard') thunderTimer = 4;
+    } else {
+      upgrade[key] = true;
+    }
     upgradeOverlay.classList.add('hidden');
     running = true;
     last = 0;
-  }
-
-  function checkCombinedUpgrades() {
-    if (!combo2.firebolt && upgrade.pierce && upgrade.bounce) {
-      combo2.firebolt = true;
-      popups.push({ x: W / 2, y: H / 2 + 30, text: 'COMBINED: FIREBOLT', color: '#ff8a1a', life: 2.0, vy: -10 });
-    }
-    if (!combo2.thunderguard && upgrade.bounce && upgrade.sides) {
-      combo2.thunderguard = true;
-      thunderTimer = 4;
-      popups.push({ x: W / 2, y: H / 2 + 30, text: 'COMBINED: THUNDERGUARD', color: '#8cd0ff', life: 2.0, vy: -10 });
-    }
-    if (!combo2.stormbolt && upgrade.bounce && upgrade.seek) {
-      combo2.stormbolt = true;
-      popups.push({ x: W / 2, y: H / 2 + 30, text: 'COMBINED: STORM BOLT', color: '#cfa8ff', life: 2.0, vy: -10 });
-    }
   }
 
   function escape(b) {
