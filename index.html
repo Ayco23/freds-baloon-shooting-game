@@ -259,7 +259,9 @@
   let lives = 5;
   let nextLifeThreshold = 100;
   const upgrade = { pierce: false, double: false, extra: false, bounce: false, sides: false, seek: false, freeze: false, random: false };
-  const combo2 = { firebolt: false, thunderguard: false, stormbolt: false, freezeburn: false, firework: false };
+  const combo2 = { firebolt: false, thunderguard: false, stormbolt: false, freezeburn: false, firework: false, icefumer: false };
+  let iceFumeTimer = 0;
+  let iceFumes = [];
   let thunderTimer = 0;
   let freezeChance = 0.10;
   let freezeActive = false;
@@ -285,7 +287,9 @@
   function anyUpgradeAvailable() {
     const remaining = BASE_POOL.filter(c => !upgrade[c.key] && !(upgrade.random && c.key === 'seek'));
     const rares = (!upgrade.freeze ? 1 : 0) + ((!upgrade.random && !upgrade.seek) ? 1 : 0);
-    const eligibleCombined = COMBINED.filter(c => !combo2[c.key] && c.requires.every(r => upgrade[r]));
+    const eligibleCombined = COMBINED
+      .filter(c => !combo2[c.key] && c.requires.every(r => upgrade[r]))
+      .filter(c => !c.conflicts || !c.conflicts.some(k => combo2[k]));
     return (remaining.length + rares + eligibleCombined.length) > 0;
   }
   let orangeUnlocked = false;
@@ -303,10 +307,11 @@
   ];
   const COMBINED = [
     { key: 'firebolt',     icon: '🔥⚡', name: 'Firebolt',     desc: 'Combined: pierce arrows tear through 2 layers of black/white balloons.', requires: ['pierce', 'bounce'] },
-    { key: 'thunderguard', icon: '⚡🛡️', name: 'Thunderguard', desc: 'Combined: side arrows are replaced by auto-bolts that fire from the bottom every few seconds.', requires: ['bounce', 'sides'] },
+    { key: 'thunderguard', icon: '⚡🛡️', name: 'Thunderguard', desc: 'Combined: side arrows are replaced by auto-bolts that fire from the bottom every few seconds.', requires: ['bounce', 'sides'], conflicts: ['icefumer'] },
     { key: 'stormbolt',    icon: '⚡🎯', name: 'Storm Bolt',   desc: 'Combined: lightning bounces reach twice as far and you get twice as many bounces.', requires: ['bounce', 'seek'] },
     { key: 'freezeburn',   icon: '❄️🔥', name: 'Freezeburn',   desc: 'Combined: balloons hit but not destroyed are slowed by frost.', requires: ['freeze', 'pierce'] },
     { key: 'firework',     icon: '🎆',   name: 'Firework Bolts', desc: 'Combined: bow shoots fireworks that explode on impact, damaging nearby balloons.', requires: ['random', 'pierce'] },
+    { key: 'icefumer',     icon: '❄️🌫️', name: 'Ice Fumer',       desc: 'Combined: side arrows are replaced by drifting ice fumes from each side that briefly freeze balloons they touch.', requires: ['freeze', 'sides'], conflicts: ['thunderguard'] },
   ];
 
   const MODE_KEY = 'balloon_mode';
@@ -403,6 +408,22 @@
     });
   }
 
+  function spawnIceFume() {
+    const sides = [];
+    if (Math.random() < 0.7) sides.push('left');
+    if (Math.random() < 0.7 || sides.length === 0) sides.push('right');
+    for (const side of sides) {
+      const y = H * 0.32 + Math.random() * H * 0.42;
+      iceFumes.push({
+        x: side === 'left' ? -30 : W + 30,
+        y,
+        vx: side === 'left' ? 230 : -230,
+        life: 1.6,
+        r: 28,
+      });
+    }
+  }
+
   function explodeFirework(x, y, primary) {
     const radius = 90;
     const colors = ['#ffd166', '#ff8a1a', '#ff5722', '#fff3a3', '#ff6b9a'];
@@ -493,7 +514,7 @@
         hits: new Set(), trail: [],
       });
     }
-    if (upgrade.sides && !combo2.thunderguard) {
+    if (upgrade.sides && !combo2.thunderguard && !combo2.icefumer) {
       const sideSpeed = speed * 0.7;
       for (const off of [-Math.PI / 2, Math.PI / 2]) {
         const a = angle + off;
@@ -596,6 +617,7 @@
     }
     const eligibleCombined = COMBINED
       .filter(c => !combo2[c.key] && c.requires.every(r => upgrade[r]))
+      .filter(c => !c.conflicts || !c.conflicts.some(k => combo2[k]))
       .map(c => Object.assign({ combined: true }, c));
     const choices = [...eligibleCombined, ...base];
     if (choices.length === 0) {
@@ -722,6 +744,29 @@
       if (thunderTimer <= 0) {
         fireThunderBolt();
         thunderTimer = 1.0 + Math.random() * 0.8;
+      }
+    }
+
+    if (combo2.icefumer) {
+      iceFumeTimer -= dt;
+      if (iceFumeTimer <= 0) {
+        spawnIceFume();
+        iceFumeTimer = 1.6 + Math.random() * 1.0;
+      }
+    }
+    for (let i = iceFumes.length - 1; i >= 0; i--) {
+      const f = iceFumes[i];
+      f.x += f.vx * dt;
+      f.life -= dt;
+      f.r += 14 * dt;
+      if (f.life <= 0) { iceFumes.splice(i, 1); continue; }
+      for (const b of balloons) {
+        if (!b.alive) continue;
+        const dx = f.x - b.x, dy = f.y - b.y;
+        const rr = (f.r + b.r);
+        if (dx * dx + dy * dy < rr * rr) {
+          b.frozen = Math.max(b.frozen || 0, 2.5);
+        }
       }
     }
 
@@ -1156,6 +1201,17 @@
       ctx.fill();
     }
     ctx.globalAlpha = 1;
+    for (const f of iceFumes) {
+      const alpha = Math.max(0, Math.min(1, f.life * 1.2)) * 0.7;
+      const grad = ctx.createRadialGradient(f.x, f.y, f.r * 0.15, f.x, f.y, f.r);
+      grad.addColorStop(0, 'rgba(220,240,255,' + alpha.toFixed(3) + ')');
+      grad.addColorStop(1, 'rgba(180,220,255,0)');
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(f.x, f.y, f.r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
     drawClouds();
     drawBow();
 
@@ -1245,8 +1301,10 @@
     nextLifeThreshold = 100;
     upgrade.pierce = upgrade.double = upgrade.extra = upgrade.bounce = false;
     upgrade.sides = upgrade.seek = upgrade.freeze = upgrade.random = false;
-    combo2.firebolt = combo2.thunderguard = combo2.stormbolt = combo2.freezeburn = combo2.firework = false;
+    combo2.firebolt = combo2.thunderguard = combo2.stormbolt = combo2.freezeburn = combo2.firework = combo2.icefumer = false;
     thunderTimer = 0;
+    iceFumeTimer = 0;
+    iceFumes = [];
     freezeChance = 0.10;
     freezeActive = false;
     freezeTimer = 0;
