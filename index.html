@@ -137,7 +137,7 @@
     <div><span class="swatch gold"></span><span>Gold · 20</span></div>
     <div><span class="swatch blue"></span><span>Blue · 10</span></div>
     <div><span class="swatch green"></span><span>Green · 5</span></div>
-    <div><span class="swatch black"></span><span>Black · 30 (2 hits)</span></div>
+    <div><span class="swatch black"></span><span>Black · 30 (2 hits, 250+)</span></div>
     <div><span class="swatch white"></span><span>White · 60 (4 hits, 300+)</span></div>
     <div><span class="swatch purple"></span><span>Purple · +1 ❤</span></div>
   </div>
@@ -209,17 +209,18 @@
     gold:   { fill: '#f5c518', stroke: '#9c7a04', shine: '#fff7c4', points: 20, weight: 1, hp: 1 },
     blue:   { fill: '#2e8bff', stroke: '#144a99', shine: '#cfe6ff', points: 10, weight: 3, hp: 1 },
     green:  { fill: '#3fbf52', stroke: '#1f6b2a', shine: '#d4f5cf', points: 5,  weight: 6, hp: 1 },
-    black:  { fill: '#2a2a2a', stroke: '#050505', shine: '#6b6b6b', points: 30, weight: 1, hp: 2 },
-    white:  { fill: '#ffffff', stroke: '#9aa0a6', shine: '#f3f6ff', points: 60, weight: 1, hp: 4 },
+    black:  { fill: '#2a2a2a', stroke: '#050505', shine: '#6b6b6b', points: 30, weight: 2, hp: 2 },
+    white:  { fill: '#ffffff', stroke: '#9aa0a6', shine: '#f3f6ff', points: 60, weight: 3, hp: 4 },
     purple: { fill: '#a64bff', stroke: '#4b148f', shine: '#f1d6ff', points: 0,  weight: 0, hp: 1, life: 1 },
   };
   let WEIGHTED = [];
   let whiteUnlocked = false;
+  let blackUnlocked = false;
   function rebuildWeights() {
     WEIGHTED = [];
     for (const k of Object.keys(COLORS)) {
       if (k === 'purple') continue;
-      if (k === 'black' && !settings.black) continue;
+      if (k === 'black' && (!settings.black || !blackUnlocked)) continue;
       if (k === 'white' && (!settings.white || !whiteUnlocked)) continue;
       for (let i = 0; i < COLORS[k].weight; i++) WEIGHTED.push(k);
     }
@@ -412,6 +413,11 @@
     while (score >= nextLifeThreshold) {
       if (settings.purple) spawnBalloon('purple');
       nextLifeThreshold += 100;
+    }
+    if (settings.black && !blackUnlocked && score >= 250) {
+      blackUnlocked = true;
+      rebuildWeights();
+      popups.push({ x: W / 2, y: H / 2, text: 'BLACK BALLOONS UNLOCKED', color: '#ffffff', life: 1.6, vy: -10 });
     }
     if (settings.white && !whiteUnlocked && score >= 300) {
       whiteUnlocked = true;
@@ -615,7 +621,6 @@
     }
     const all = [];
     if (settings.upgrades) all.push({ at: 100, name: 'Upgrade 1', done: () => tier1Offered });
-    if (settings.white)    all.push({ at: 300, name: 'White unlock', done: () => whiteUnlocked });
     if (settings.upgrades) all.push({ at: 500, name: 'Upgrade 2', done: () => tier2Offered });
     if (settings.upgrades) all.push({ at: 800, name: 'Upgrade 3', done: () => tier3Offered });
     all.sort((a, b) => a.at - b.at);
@@ -960,7 +965,6 @@
   canvas.addEventListener('mouseup', onEnd);
 
   function startGame() {
-    rebuildWeights();
     balloons = []; arrows = []; particles = []; popups = [];
     score = 0; combo = 0; comboTimer = 0; elapsed = 0;
     spawnTimer = 0.5; spawnInterval = 1.1; lives = 5;
@@ -969,6 +973,8 @@
     upgrade.sides = upgrade.seek = false;
     tier1Offered = false; tier2Offered = false; tier3Offered = false;
     whiteUnlocked = false;
+    blackUnlocked = false;
+    rebuildWeights();
     running = true; last = 0;
     startOverlay.classList.add('hidden');
     overOverlay.classList.add('hidden');
