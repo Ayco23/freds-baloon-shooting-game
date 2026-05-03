@@ -1,0 +1,1404 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<title>Fred's Balloon Shooter</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    width: 100%; height: 100%; overflow: hidden;
+    background: #0b1d3a; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    user-select: none; -webkit-user-select: none; touch-action: none;
+    overscroll-behavior: none;
+  }
+  #game { display: block; position: fixed; top: 0; left: 0; touch-action: none; }
+  #ui {
+    position: absolute; top: env(safe-area-inset-top, 12px); left: 0; right: 0;
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 10px 16px; color: #fff; font-weight: 700; font-size: 18px;
+    text-shadow: 0 2px 4px rgba(0,0,0,0.4); pointer-events: none;
+  }
+  #score { font-size: 22px; }
+  #combo { font-size: 14px; opacity: 0.85; }
+  .overlay {
+    position: fixed; inset: 0; display: flex; flex-direction: column;
+    justify-content: center; align-items: center; text-align: center;
+    color: #fff; padding: 24px; overflow: auto;
+    background: radial-gradient(ellipse at center, rgba(11,29,58,0.6), rgba(11,29,58,0.95));
+    backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+  }
+  .overlay h1 { font-size: 32px; margin-bottom: 10px; letter-spacing: 0.5px; }
+  .overlay p { font-size: 15px; opacity: 0.9; margin-bottom: 6px; line-height: 1.45; max-width: 300px; }
+  .legend {
+    display: flex; flex-wrap: wrap; justify-content: center;
+    gap: 10px 14px; margin: 14px 0; max-width: 300px;
+  }
+  .legend div { display: flex; flex-direction: column; align-items: center; gap: 6px; font-size: 12px; min-width: 56px; }
+  .swatch { width: 26px; height: 30px; border-radius: 50%; box-shadow: 0 4px 8px rgba(0,0,0,0.3); }
+  .gold   { background: radial-gradient(circle at 35% 30%, #fff7c4, #f5c518 60%, #b8860b); }
+  .blue   { background: radial-gradient(circle at 35% 30%, #cfe6ff, #2e8bff 60%, #144a99); }
+  .green  { background: radial-gradient(circle at 35% 30%, #d4f5cf, #3fbf52 60%, #1f6b2a); }
+  .purple { background: radial-gradient(circle at 35% 30%, #f1d6ff, #a64bff 60%, #4b148f); }
+  .black  { background: radial-gradient(circle at 35% 30%, #6b6b6b, #2a2a2a 60%, #050505); }
+  .white  { background: radial-gradient(circle at 35% 30%, #ffffff, #e8e8e8 60%, #b3b3b3); }
+  .metal  { background: radial-gradient(circle at 35% 30%, #e6e8eb, #a6acaf 55%, #2c3033); }
+  .orange { background: radial-gradient(circle at 35% 30%, #ffd9a8, #ff8a1a 60%, #a14b00); }
+  button {
+    margin-top: 18px; font-size: 18px; font-weight: 700; padding: 14px 28px;
+    border: none; border-radius: 999px; color: #0b1d3a;
+    background: linear-gradient(180deg, #ffe26d, #f5c518);
+    box-shadow: 0 6px 14px rgba(0,0,0,0.3); cursor: pointer;
+  }
+  button:active { transform: translateY(1px); }
+  .hidden { display: none !important; }
+  .choices { display: flex; gap: 14px; margin-top: 12px; flex-wrap: wrap; justify-content: center; }
+  .choice {
+    flex: 0 0 140px; padding: 16px 12px; border-radius: 16px; cursor: pointer;
+    background: rgba(255,255,255,0.08); border: 2px solid rgba(255,255,255,0.18);
+    display: flex; flex-direction: column; align-items: center; gap: 8px;
+    transition: transform 0.1s ease, background 0.1s ease;
+  }
+  .choice:active { transform: scale(0.97); background: rgba(255,255,255,0.15); }
+  .choice .icon { font-size: 30px; line-height: 1; }
+  .choice .name { font-weight: 700; font-size: 15px; }
+  .choice .desc { font-size: 12px; opacity: 0.85; line-height: 1.35; }
+  .choice.combined {
+    background: rgba(63,191,82,0.18); border-color: #3fbf52;
+    box-shadow: 0 0 0 2px rgba(63,191,82,0.25), 0 4px 14px rgba(63,191,82,0.25);
+  }
+  .choice.combined .name { color: #b6f5b6; }
+  .choice.combined .desc { color: #d8f5d8; opacity: 1; }
+  .choice.rare {
+    background: rgba(166,75,255,0.20); border-color: #c89bff;
+    box-shadow: 0 0 0 2px rgba(166,75,255,0.30), 0 4px 14px rgba(166,75,255,0.30);
+  }
+  .choice.rare .name { color: #efdfff; }
+  .choice.rare .desc { color: #f5ebff; opacity: 1; }
+  .settings { display: flex; flex-direction: column; gap: 10px; margin: 14px 0 4px; width: 280px; }
+  .modes { display: flex; gap: 10px; width: 280px; margin: 14px 0 4px; }
+  .mode {
+    flex: 1; padding: 14px 10px; border-radius: 14px; cursor: pointer; user-select: none;
+    background: rgba(255,255,255,0.08); border: 2px solid rgba(255,255,255,0.18);
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+    transition: background 0.15s, border-color 0.15s, transform 0.1s;
+  }
+  .mode:active { transform: scale(0.97); }
+  .mode .mname { font-weight: 700; font-size: 15px; }
+  .mode .mdesc { font-size: 11px; opacity: 0.8; line-height: 1.3; }
+  .mode.selected { background: rgba(245,197,24,0.18); border-color: #f5c518; }
+  .toggle {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 10px 14px; border-radius: 12px;
+    background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.18);
+    font-size: 14px; cursor: pointer; user-select: none;
+  }
+  .toggle .label { font-weight: 600; }
+  .toggle .switch {
+    width: 42px; height: 24px; border-radius: 999px;
+    background: rgba(255,255,255,0.18); position: relative; transition: background 0.15s;
+  }
+  .toggle .switch::after {
+    content: ''; position: absolute; top: 2px; left: 2px;
+    width: 20px; height: 20px; border-radius: 50%; background: #fff;
+    transition: left 0.15s;
+  }
+  .toggle.on .switch { background: #3fbf52; }
+  .toggle.on .switch::after { left: 20px; }
+  #hint {
+    position: absolute; bottom: env(safe-area-inset-bottom, 12px); left: 0; right: 0;
+    text-align: center; color: rgba(255,255,255,0.75); font-size: 13px;
+    pointer-events: none; padding: 8px;
+  }
+  #progress {
+    position: absolute; top: calc(env(safe-area-inset-top, 12px) + 50px);
+    left: 16px; right: 16px; pointer-events: none;
+    color: rgba(255,255,255,0.95); font-size: 12px; font-weight: 600;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.5);
+  }
+  #progress.hidden { display: none; }
+  #progress .bar {
+    margin-top: 4px; height: 8px; border-radius: 999px;
+    background: rgba(255,255,255,0.15); overflow: hidden;
+  }
+  #progress .fill {
+    height: 100%; width: 0%;
+    background: linear-gradient(90deg, #ffe26d, #f5c518);
+    transition: width 0.15s ease;
+  }
+  #progress .label { display: flex; justify-content: space-between; }
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<div id="ui">
+  <div id="score">Score: 0</div>
+  <div id="combo"></div>
+  <div id="best">Best: 0</div>
+</div>
+<div id="progress" class="hidden">
+  <div class="label"><span id="progressName">Next upgrade</span><span id="progressNums">0 / 100</span></div>
+  <div class="bar"><div class="fill" id="progressFill"></div></div>
+</div>
+<div id="hint">Drag to aim • Release to shoot</div>
+
+<div id="start" class="overlay">
+  <h1>🎈 Balloon Shooter</h1>
+  <p>Pop the balloons before they reach the clouds!</p>
+  <div class="legend">
+    <div><span class="swatch gold"></span><span>Gold · 20</span></div>
+    <div><span class="swatch blue"></span><span>Blue · 10</span></div>
+    <div><span class="swatch green"></span><span>Green · 5</span></div>
+    <div><span class="swatch black"></span><span>Black · 30 (2 hits, 200+)</span></div>
+    <div><span class="swatch white"></span><span>White · 60 (4 hits, 800+)</span></div>
+    <div><span class="swatch metal"></span><span>Metal · 100 (fire only, late game)</span></div>
+    <div><span class="swatch orange"></span><span>Orange · 25 (side bursts, 1300+)</span></div>
+    <div><span class="swatch purple"></span><span>Purple · +1 ❤</span></div>
+  </div>
+  <p>Drag anywhere on the screen to aim your bow.<br/>Release to fire an arrow.</p>
+  <p>If a balloon escapes into the clouds, you lose its points!</p>
+  <p>Balloons speed up the longer you survive — pick your shots!</p>
+  <div class="modes">
+    <div class="mode" data-mode="original">
+      <div class="mname">Original</div>
+      <div class="mdesc">Gold, blue, green &amp; purple life balloons.</div>
+    </div>
+    <div class="mode" data-mode="modded">
+      <div class="mname">Modded</div>
+      <div class="mdesc">Adds black balloons + upgrade picks at 100 &amp; 500 pts.</div>
+    </div>
+  </div>
+  <button id="startBtn">Start Game</button>
+</div>
+
+<div id="upgrade" class="overlay hidden">
+  <h1 id="upgradeTitle">Choose an upgrade</h1>
+  <p id="upgradeSubtitle">Pick one perk for the rest of this run.</p>
+  <div class="choices" id="upgradeChoices"></div>
+</div>
+
+<div id="gameover" class="overlay hidden">
+  <h1>Game Over</h1>
+  <p id="finalScore">Score: 0</p>
+  <p id="finalBest">Best: 0</p>
+  <button id="retryBtn">Play Again</button>
+</div>
+
+<script>
+(function () {
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+  const scoreEl = document.getElementById('score');
+  const comboEl = document.getElementById('combo');
+  const bestEl = document.getElementById('best');
+  const hintEl = document.getElementById('hint');
+  const startOverlay = document.getElementById('start');
+  const overOverlay = document.getElementById('gameover');
+  const upgradeOverlay = document.getElementById('upgrade');
+  const startBtn = document.getElementById('startBtn');
+  const retryBtn = document.getElementById('retryBtn');
+  const finalScoreEl = document.getElementById('finalScore');
+  const finalBestEl = document.getElementById('finalBest');
+
+  let DPR = Math.min(window.devicePixelRatio || 1, 2);
+  let W = 0, H = 0;
+  function resize() {
+    DPR = Math.min(window.devicePixelRatio || 1, 2);
+    W = window.innerWidth || document.documentElement.clientWidth;
+    H = window.innerHeight || document.documentElement.clientHeight;
+    document.documentElement.style.height = H + 'px';
+    document.body.style.height = H + 'px';
+    canvas.width = Math.floor(W * DPR);
+    canvas.height = Math.floor(H * DPR);
+    canvas.style.width = W + 'px';
+    canvas.style.height = H + 'px';
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    placeBow();
+    makeClouds();
+  }
+  window.addEventListener('resize', resize);
+  window.addEventListener('orientationchange', () => setTimeout(resize, 150));
+
+  const COLORS = {
+    gold:   { fill: '#f5c518', stroke: '#9c7a04', shine: '#fff7c4', points: 20, weight: 1, hp: 1 },
+    blue:   { fill: '#2e8bff', stroke: '#144a99', shine: '#cfe6ff', points: 10, weight: 3, hp: 1 },
+    green:  { fill: '#3fbf52', stroke: '#1f6b2a', shine: '#d4f5cf', points: 5,  weight: 6, hp: 1 },
+    black:  { fill: '#2a2a2a', stroke: '#050505', shine: '#6b6b6b', points: 30, weight: 2, hp: 2 },
+    white:  { fill: '#ffffff', stroke: '#9aa0a6', shine: '#f3f6ff', points: 60, weight: 3, hp: 4 },
+    metal:  { fill: '#a6acaf', stroke: '#2c3033', shine: '#e6e8eb', points: 100, weight: 1, hp: 1 },
+    orange: { fill: '#ff8a1a', stroke: '#a14b00', shine: '#ffd9a8', points: 25, weight: 0, hp: 1 },
+    purple: { fill: '#a64bff', stroke: '#4b148f', shine: '#f1d6ff', points: 0,  weight: 0, hp: 1, life: 1 },
+  };
+  let WEIGHTED = [];
+  let whiteUnlocked = false;
+  let blackUnlocked = false;
+  let metalUnlocked = false;
+  let metalCooldown = 0;
+  let greenRemoved = false;
+  function rebuildWeights() {
+    WEIGHTED = [];
+    for (const k of Object.keys(COLORS)) {
+      if (k === 'purple') continue;
+      if (k === 'orange') continue;
+      if (k === 'black' && (!settings.black || !blackUnlocked)) continue;
+      if (k === 'white' && (!settings.white || !whiteUnlocked)) continue;
+      if (k === 'metal' && (!settings.metal || !metalUnlocked)) continue;
+      if (k === 'green' && greenRemoved) continue;
+      for (let i = 0; i < COLORS[k].weight; i++) WEIGHTED.push(k);
+    }
+  }
+
+  let balloons = [];
+  let arrows = [];
+  let particles = [];
+  let popups = [];
+  let clouds = [];
+
+  let score = 0;
+  let combo = 0;
+  let comboTimer = 0;
+  let running = false;
+  let spawnTimer = 0;
+  let spawnInterval = 1.1;
+  let elapsed = 0;
+  let lives = 5;
+  let nextLifeThreshold = 100;
+  const upgrade = { pierce: false, double: false, extra: false, bounce: false, sides: false, seek: false, freeze: false, random: false };
+  const combo2 = { firebolt: false, thunderguard: false, stormbolt: false, freezeburn: false, firework: false, icefumer: false, chainlightning: false, twinhunters: false, wildlightning: false, pinball: false, ghostvolley: false };
+  let iceFumes = [];
+  let thunderTimer = 0;
+  let freezeChance = 0.10;
+  let freezeActive = false;
+  let freezeTimer = 0;
+  let freezeCooldown = 0;
+  const FREEZE_UPGRADE = {
+    key: 'freeze', icon: '❄️', name: 'Freeze',
+    desc: 'Rare: every once in a while, every balloon on screen gets a frost layer that slows their movement.',
+    rare: true,
+  };
+  const RANDOM_UPGRADE = {
+    key: 'random', icon: '💃', name: 'Dancing Bolts',
+    desc: 'Rare: arrows dance along an unpredictable curve. Locks out Seeking Darts.',
+    rare: true, locks: 'seek',
+  };
+  let tiersOffered = 0;
+  function milestoneFor(tier) {
+    const fixed = [100, 300, 600, 1000, 1500, 2100];
+    if (tier <= fixed.length) return fixed[tier - 1];
+    return 2100 + (tier - 6) * 800;
+  }
+  function anyUpgradeAvailable() {
+    const remaining = BASE_POOL.filter(c => !upgrade[c.key] && !(upgrade.random && c.key === 'seek'));
+    const rares = (!upgrade.freeze ? 1 : 0) + ((!upgrade.random && !upgrade.seek) ? 1 : 0);
+    const eligibleCombined = COMBINED
+      .filter(c => !combo2[c.key] && c.requires.every(r => upgrade[r]) && (!c.requiresAny || c.requiresAny.some(r => upgrade[r])))
+      .filter(c => !c.conflicts || !c.conflicts.some(k => combo2[k]));
+    return (remaining.length + rares + eligibleCombined.length) > 0;
+  }
+  let orangeUnlocked = false;
+  let orangeBurstTimer = 0;
+  let orangeQueue = [];
+  const MAX_LIVES = 9;
+
+  const BASE_POOL = [
+    { key: 'pierce', icon: '🔥',   name: 'Fire Arrows',      desc: 'Arrows pierce through balloons — pop multiple in one shot.' },
+    { key: 'double', icon: '➕🏹', name: 'Extra Arrow',      desc: 'Adds one more arrow to every shot. Stacks (max +2).' },
+    { key: 'extra',  icon: '➕🏹', name: 'Extra Arrow',      desc: 'Adds another arrow to every shot. Stacks (max +2).' },
+    { key: 'bounce', icon: '⚡',   name: 'Lightning Bounce', desc: 'Arrows ricochet off the walls and ceiling.' },
+    { key: 'sides',  icon: '↔️',   name: 'Side Arrows',      desc: 'Each shot also fires two short-range arrows to the sides.' },
+    { key: 'seek',   icon: '🎯',   name: 'Seeking Darts',    desc: 'Arrows gently steer toward the nearest balloon.' },
+  ];
+  const COMBINED = [
+    { key: 'firebolt',     icon: '🔥⚡', name: 'Firebolt',     desc: 'Combined: pierce arrows tear through 2 layers of black/white balloons.', requires: ['pierce', 'bounce'] },
+    { key: 'thunderguard', icon: '⚡🛡️', name: 'Thunderguard', desc: 'Combined: side arrows are replaced by auto-bolts that fire from the bottom every few seconds.', requires: ['bounce', 'sides'], conflicts: ['icefumer'] },
+    { key: 'stormbolt',    icon: '⚡🎯', name: 'Storm Bolt',   desc: 'Combined: lightning bounces reach twice as far and you get twice as many bounces.', requires: ['bounce', 'seek'] },
+    { key: 'freezeburn',   icon: '❄️🔥', name: 'Freezeburn',   desc: 'Combined: balloons hit but not destroyed are slowed by frost.', requires: ['freeze', 'pierce'] },
+    { key: 'firework',     icon: '🎆',   name: 'Firework Bolts', desc: 'Combined: bow shoots fireworks that explode on impact, damaging nearby balloons.', requires: ['random', 'pierce'] },
+    { key: 'icefumer',     icon: '❄️🌫️', name: 'Ice Fumer',       desc: 'Combined: side arrows are replaced by drifting ice fumes from each side that briefly freeze balloons they touch.', requires: ['freeze', 'sides'], conflicts: ['thunderguard'] },
+    { key: 'chainlightning', icon: '⛓️⚡', name: 'Chain Lightning', desc: 'Combined: bouncing arrows instantly retarget the closest other balloon on every hit (up to 4 chains).', requires: ['bounce', 'seek'] },
+    { key: 'twinhunters',  icon: '🎯🎯', name: 'Twin Hunters',  desc: 'Combined: each arrow seeks a different target instead of all chasing the closest one.', requires: ['seek'], requiresAny: ['double', 'extra'] },
+    { key: 'wildlightning', icon: '⚡💃', name: 'Wild Lightning', desc: 'Combined: bounces randomly redirect along the dance curve, often returning into the play area.', requires: ['bounce', 'random'] },
+    { key: 'pinball',      icon: '💃↔️', name: 'Pinball',       desc: 'Combined: side arrows wobble and ricochet off the screen edges before fading.', requires: ['sides', 'random'] },
+    { key: 'ghostvolley',  icon: '💃➕🏹', name: 'Ghost Volley',  desc: 'Combined: each arrow takes a wider, independent random curve, fanning the dance pattern.', requires: ['random'], requiresAny: ['double', 'extra'] },
+  ];
+
+  const MODE_KEY = 'balloon_mode';
+  let mode = localStorage.getItem(MODE_KEY) === 'modded' ? 'modded' : 'original';
+  const MODE_FLAGS = {
+    original: { black: false, white: false, orange: false, metal: false, purple: true, upgrades: false },
+    modded:   { black: true,  white: true,  orange: true,  metal: true,  purple: true, upgrades: true  },
+  };
+  const settings = Object.assign({}, MODE_FLAGS[mode]);
+  const BEST_KEYS = { original: 'balloon_best_original', modded: 'balloon_best_modded' };
+  function getBest(m) { return parseInt(localStorage.getItem(BEST_KEYS[m]) || '0', 10); }
+  function setBest(m, v) { localStorage.setItem(BEST_KEYS[m], String(v)); }
+  function applyModeUI() {
+    for (const el of document.querySelectorAll('#start .mode')) {
+      el.classList.toggle('selected', el.dataset.mode === mode);
+    }
+    bestEl.textContent = 'Best: ' + getBest(mode);
+  }
+  function setMode(m) {
+    mode = m;
+    localStorage.setItem(MODE_KEY, m);
+    Object.assign(settings, MODE_FLAGS[m]);
+    applyModeUI();
+  }
+
+  let aiming = false;
+  let aimStart = null;
+  let aimNow = null;
+
+  const bow = { x: 0, y: 0, w: 70, drawW: 70 };
+  function placeBow() {
+    bow.x = W / 2;
+    bow.y = H - 70;
+  }
+
+  const cloudY = () => Math.max(110, H * 0.18);
+
+  function makeClouds() {
+    clouds = [];
+    const y = cloudY();
+    let x = -60;
+    while (x < W + 60) {
+      clouds.push({ x, y: y + (Math.random() * 24 - 12), r: 28 + Math.random() * 22, drift: 6 + Math.random() * 10 });
+      x += 70 + Math.random() * 40;
+    }
+  }
+
+  resize();
+
+  function pickColorKey() {
+    let key = WEIGHTED[Math.floor(Math.random() * WEIGHTED.length)];
+    if (key === 'metal' && metalCooldown > 0) {
+      const others = WEIGHTED.filter(k => k !== 'metal');
+      if (others.length) key = others[Math.floor(Math.random() * others.length)];
+    }
+    return key;
+  }
+
+  function spawnBalloon(forcedKey) {
+    const key = forcedKey || pickColorKey();
+    const r = key === 'gold' ? 20
+            : key === 'blue' ? 24
+            : key === 'purple' ? 22
+            : key === 'black' ? 28
+            : key === 'white' ? 32
+            : key === 'metal' ? 26
+            : 26;
+    const x = 30 + Math.random() * (W - 60);
+    const y = H + r + 30;
+    const baseSpeed = 50 + elapsed * 1.8;
+    const speedMul = key === 'gold' ? 1.4
+                   : key === 'blue' ? 1.1
+                   : key === 'purple' ? 1.25
+                   : key === 'black' ? 0.85
+                   : key === 'white' ? 0.75
+                   : key === 'metal' ? 0.45
+                   : 0.9;
+    const speed = baseSpeed * speedMul + Math.random() * 20;
+    balloons.push({
+      x, y, r, color: key, vy: -speed,
+      sway: Math.random() * Math.PI * 2,
+      swaySpeed: 1 + Math.random() * 1.5,
+      swayAmp: 8 + Math.random() * 18,
+      baseX: x,
+      hp: COLORS[key].hp,
+      hitFlash: 0,
+      alive: true,
+    });
+    if (key === 'metal') metalCooldown = 14 + Math.random() * 8;
+  }
+
+  function spawnOrange(side, y) {
+    const speed = 110 + Math.random() * 50;
+    const r = 22;
+    const x = side === 'left' ? -r - 10 : W + r + 10;
+    balloons.push({
+      x, y, baseX: x, r, color: 'orange',
+      vx: side === 'left' ? speed : -speed, vy: 0,
+      sway: 0, swaySpeed: 0, swayAmp: 0,
+      hp: 1, hitFlash: 0, alive: true,
+      life: 0, upDelay: 0.85 + Math.random() * 0.4,
+    });
+  }
+
+  function spawnIceFumesFromBow(angle) {
+    for (const sign of [-1, 1]) {
+      const a = angle + sign * Math.PI / 2;
+      iceFumes.push({
+        x: bow.x + Math.cos(a) * 26,
+        y: bow.y + Math.sin(a) * 26,
+        vx: Math.cos(a) * 200,
+        vy: Math.sin(a) * 200,
+        life: 0.55,
+        r: 12,
+      });
+    }
+  }
+
+  function explodeFirework(x, y, primary) {
+    const radius = 90;
+    const colors = ['#ffd166', '#ff8a1a', '#ff5722', '#fff3a3', '#ff6b9a'];
+    for (let i = 0; i < 36; i++) {
+      const a = (i / 36) * Math.PI * 2;
+      const s = 200 + Math.random() * 280;
+      particles.push({
+        x, y,
+        vx: Math.cos(a) * s,
+        vy: Math.sin(a) * s,
+        life: 0.6 + Math.random() * 0.5,
+        color: colors[Math.floor(Math.random() * colors.length)],
+        size: 2 + Math.random() * 3,
+      });
+    }
+    for (const b of balloons) {
+      if (!b.alive) continue;
+      const dx = b.x - x, dy = b.y - y;
+      if (dx * dx + dy * dy <= (radius + b.r) * (radius + b.r)) {
+        hit(b, { fire: true, bounce: false });
+      }
+    }
+  }
+
+  function fireThunderBolt() {
+    const live = balloons.filter(b => b.alive);
+    if (!live.length) return;
+    const sorted = live.slice().sort((a, b) => (a.y - a.r) - (b.y - b.r));
+    const targets = sorted.slice(0, Math.min(3, sorted.length));
+    for (let i = 0; i < targets.length; i++) {
+      const target = targets[i];
+      const x = 30 + Math.random() * (W - 60);
+      const y = H + 10;
+      const dx = target.x - x, dy = target.y - y;
+      const d = Math.hypot(dx, dy) || 1;
+      const speed = 950;
+      arrows.push({
+        x, y,
+        vx: dx / d * speed,
+        vy: dy / d * speed,
+        angle: Math.atan2(dy, dx), alive: true, life: 1.8,
+        fire: true, bounce: false, bounces: 0,
+        seek: true, thunder: true,
+        hits: new Set(), trail: [],
+      });
+    }
+  }
+
+  function scheduleOrangeBurst() {
+    const heavy = score >= 3000;
+    const count = heavy ? 4 + Math.floor(Math.random() * 5) : 2 + Math.floor(Math.random() * 4);
+    const side = Math.random() < 0.5 ? 'left' : 'right';
+    const baseY = H * (0.65 + Math.random() * 0.10);
+    for (let i = 0; i < count; i++) {
+      orangeQueue.push({
+        delay: i * (heavy ? 0.20 + Math.random() * 0.12 : 0.30 + Math.random() * 0.15),
+        side,
+        y: baseY + (Math.random() - 0.5) * 28,
+      });
+    }
+    orangeBurstTimer = heavy ? 6 + Math.random() * 5 : 11 + Math.random() * 8;
+  }
+
+  function shootArrow(angle, power) {
+    const speed = 700 + power * 600;
+    let count = 1 + (upgrade.double ? 1 : 0) + (upgrade.extra ? 1 : 0);
+    const spread = 0.09 * (combo2.ghostvolley ? 2.2 : 1);
+    const curveBase = combo2.ghostvolley ? 5 : 3;
+    const angles = [];
+    if (count === 1) {
+      angles.push(angle);
+    } else {
+      for (let i = 0; i < count; i++) {
+        const t = count === 1 ? 0 : (i / (count - 1)) * 2 - 1;
+        angles.push(angle + t * spread * (count - 1) * 0.6);
+      }
+    }
+    let twinTargets = null;
+    if (combo2.twinhunters && upgrade.seek) {
+      twinTargets = balloons.filter(b => b.alive).sort((b1, b2) => {
+        const d1 = Math.hypot(b1.x - bow.x, b1.y - bow.y);
+        const d2 = Math.hypot(b2.x - bow.x, b2.y - bow.y);
+        return d1 - d2;
+      });
+    }
+    for (let i = 0; i < angles.length; i++) {
+      const a = angles[i];
+      arrows.push({
+        x: bow.x, y: bow.y - 20,
+        vx: Math.cos(a) * speed,
+        vy: Math.sin(a) * speed,
+        angle: a, alive: true, life: 2.8,
+        fire: upgrade.pierce, bounce: upgrade.bounce, bounces: 0,
+        seek: upgrade.seek,
+        random: upgrade.random,
+        firework: combo2.firework,
+        curvature: upgrade.random ? (Math.random() - 0.5) * curveBase : 0,
+        target: twinTargets ? twinTargets[i] || null : null,
+        chains: 0,
+        hits: new Set(), trail: [],
+      });
+    }
+    if (upgrade.sides && !combo2.thunderguard && !combo2.icefumer) {
+      const sideSpeed = speed * 0.7;
+      for (const off of [-Math.PI / 2, Math.PI / 2]) {
+        const a = angle + off;
+        arrows.push({
+          x: bow.x, y: bow.y - 20,
+          vx: Math.cos(a) * sideSpeed,
+          vy: Math.sin(a) * sideSpeed,
+          angle: a, alive: true, life: combo2.pinball ? 0.85 : 0.45,
+          fire: upgrade.pierce, bounce: !!combo2.pinball, bounces: 0,
+          seek: false, side: true,
+          random: !!combo2.pinball,
+          curvature: combo2.pinball ? (Math.random() - 0.5) * 3 : 0,
+          chains: 0,
+          hits: new Set(), trail: [],
+        });
+      }
+    }
+    if (combo2.icefumer) spawnIceFumesFromBow(angle);
+  }
+
+  function hit(b, a) {
+    if (b.color === 'metal' && (!a || !a.fire)) {
+      b.hitFlash = 0.25;
+      spawnParticles(b.x, b.y, '#cccccc', 4);
+      popups.push({ x: b.x, y: b.y - b.r, text: 'clang!', color: '#cccccc', life: 0.5, vy: -30 });
+      return;
+    }
+    const dmg = (a && combo2.firebolt && a.fire && a.bounce && b.hp > 1) ? 2 : 1;
+    b.hp -= dmg;
+    if (b.hp > 0) {
+      const c = COLORS[b.color];
+      b.hitFlash = 0.25;
+      if (b.color === 'white') b.r = Math.max(10, b.r - 5 * dmg);
+      spawnParticles(b.x, b.y, c.shine, b.color === 'white' ? 14 : 8);
+      const text = b.color === 'white' ? 'peel!' : 'crack!';
+      popups.push({ x: b.x, y: b.y - b.r, text, color: '#ffffff', life: 0.6, vy: -30 });
+      if (combo2.freezeburn) b.frozen = Math.max(b.frozen || 0, 4);
+      return;
+    }
+    pop(b);
+  }
+
+  function pop(b) {
+    b.alive = false;
+    const c = COLORS[b.color];
+    if (c.life) {
+      if (lives < MAX_LIVES) lives += c.life;
+      spawnParticles(b.x, b.y, c.fill, 26);
+      popups.push({ x: b.x, y: b.y, text: '+1 ❤', color: c.fill, life: 1.1, vy: -40 });
+      return;
+    }
+    score += c.points;
+    combo += 1;
+    comboTimer = 1.5;
+    spawnParticles(b.x, b.y, c.fill, 18);
+    popups.push({ x: b.x, y: b.y, text: '+' + c.points, color: c.fill, life: 0.9, vy: -40 });
+    while (score >= nextLifeThreshold) {
+      if (settings.purple) {
+        let chance = 1.0;
+        if (nextLifeThreshold > 3000) chance = 0.05;
+        else if (nextLifeThreshold > 1200) chance = 0.15;
+        if (Math.random() < chance) spawnBalloon('purple');
+      }
+      nextLifeThreshold += 100;
+    }
+    if (settings.black && !blackUnlocked && score >= 200) {
+      blackUnlocked = true;
+      rebuildWeights();
+      popups.push({ x: W / 2, y: H / 2, text: 'BLACK BALLOONS UNLOCKED', color: '#ffffff', life: 1.6, vy: -10 });
+    }
+    if (settings.white && !whiteUnlocked && score >= 800) {
+      whiteUnlocked = true;
+      rebuildWeights();
+      popups.push({ x: W / 2, y: H / 2, text: 'WHITE BALLOONS UNLOCKED', color: '#ffffff', life: 1.6, vy: -10 });
+    }
+    if (settings.metal && !metalUnlocked && tiersOffered >= 4) {
+      metalUnlocked = true;
+      rebuildWeights();
+      popups.push({ x: W / 2, y: H / 2, text: 'METAL BALLOONS APPEAR', color: '#cccccc', life: 1.6, vy: -10 });
+    }
+    if (!greenRemoved && score >= 3000) {
+      greenRemoved = true;
+      rebuildWeights();
+    }
+    if (settings.orange && !orangeUnlocked && score >= 1300) {
+      orangeUnlocked = true;
+      orangeBurstTimer = 3;
+      popups.push({ x: W / 2, y: H / 2, text: 'ORANGE BALLOONS INCOMING', color: '#ff8a1a', life: 1.8, vy: -10 });
+    }
+    if (settings.upgrades && anyUpgradeAvailable() && score >= milestoneFor(tiersOffered + 1)) {
+      tiersOffered++;
+      offerUpgrade(tiersOffered);
+    }
+  }
+
+  const upgradeTitleEl = document.getElementById('upgradeTitle');
+  const upgradeSubtitleEl = document.getElementById('upgradeSubtitle');
+  const upgradeChoicesEl = document.getElementById('upgradeChoices');
+
+  function offerUpgrade(tier) {
+    running = false;
+    const unowned = BASE_POOL.filter(c => !upgrade[c.key] && !(upgrade.random && c.key === 'seek'));
+    for (let i = unowned.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [unowned[i], unowned[j]] = [unowned[j], unowned[i]];
+    }
+    const base = unowned.slice(0, Math.min(2, unowned.length));
+    const availableRares = [];
+    if (!upgrade.freeze) availableRares.push(FREEZE_UPGRADE);
+    if (!upgrade.random && !upgrade.seek) availableRares.push(RANDOM_UPGRADE);
+    if (availableRares.length && base.length > 0 && Math.random() < freezeChance) {
+      const rare = availableRares[Math.floor(Math.random() * availableRares.length)];
+      const idx = Math.floor(Math.random() * base.length);
+      base[idx] = rare;
+    }
+    const eligibleCombined = COMBINED
+      .filter(c => !combo2[c.key] && c.requires.every(r => upgrade[r]) && (!c.requiresAny || c.requiresAny.some(r => upgrade[r])))
+      .filter(c => !c.conflicts || !c.conflicts.some(k => combo2[k]))
+      .map(c => Object.assign({ combined: true }, c));
+    const choices = [...eligibleCombined, ...base];
+    if (choices.length === 0) {
+      running = true; last = 0;
+      return;
+    }
+    upgradeTitleEl.textContent = milestoneFor(tier) + ' points reached!';
+    upgradeSubtitleEl.textContent = 'Pick another perk for the rest of this run.';
+    upgradeChoicesEl.innerHTML = '';
+    for (const c of choices) {
+      const el = document.createElement('div');
+      el.className = 'choice' + (c.combined ? ' combined' : '') + (c.rare ? ' rare' : '');
+      el.dataset.choice = c.key;
+      el.innerHTML =
+        '<div class="icon">' + c.icon + '</div>' +
+        '<div class="name">' + c.name + '</div>' +
+        '<div class="desc">' + c.desc + '</div>';
+      el.addEventListener('click', () => chooseUpgrade(c.key));
+      upgradeChoicesEl.appendChild(el);
+    }
+    upgradeOverlay.classList.remove('hidden');
+  }
+
+  function chooseUpgrade(key) {
+    if (combo2.hasOwnProperty(key)) {
+      combo2[key] = true;
+      if (key === 'thunderguard') thunderTimer = 4;
+    } else {
+      upgrade[key] = true;
+      if (key === 'freeze') freezeCooldown = 6;
+    }
+    const raresLeft = !upgrade.freeze || (!upgrade.random && !upgrade.seek);
+    if (raresLeft) freezeChance = Math.min(1.0, freezeChance + 0.08);
+    upgradeOverlay.classList.add('hidden');
+    running = true;
+    last = 0;
+  }
+
+  function escape(b) {
+    b.alive = false;
+    const c = COLORS[b.color];
+    if (c.life) {
+      spawnParticles(b.x, b.y, c.fill, 6);
+      return;
+    }
+    score = Math.max(0, score - c.points);
+    lives -= 1;
+    combo = 0;
+    spawnParticles(b.x, b.y, '#ffffff', 8);
+    popups.push({ x: b.x, y: b.y, text: '-' + c.points, color: '#ff6b6b', life: 1.0, vy: -40 });
+    if (lives <= 0) endGame();
+  }
+
+  function spawnParticles(x, y, color, n) {
+    for (let i = 0; i < n; i++) {
+      const a = Math.random() * Math.PI * 2;
+      const s = 80 + Math.random() * 200;
+      particles.push({
+        x, y,
+        vx: Math.cos(a) * s,
+        vy: Math.sin(a) * s,
+        life: 0.6 + Math.random() * 0.4,
+        color, size: 2 + Math.random() * 3,
+      });
+    }
+  }
+
+  function update(dt) {
+    elapsed += dt;
+    spawnTimer -= dt;
+    if (metalCooldown > 0) metalCooldown = Math.max(0, metalCooldown - dt);
+    spawnInterval = Math.max(0.4, 1.1 - elapsed * 0.01);
+    if (spawnTimer <= 0) {
+      spawnBalloon();
+      spawnTimer = spawnInterval;
+    }
+    if (comboTimer > 0) {
+      comboTimer -= dt;
+      if (comboTimer <= 0) combo = 0;
+    }
+
+    for (const c of clouds) {
+      c.x += c.drift * dt;
+      if (c.x - c.r > W + 30) c.x = -c.r - 30;
+    }
+
+    const globalSlow = freezeActive ? 0.3 : 1;
+    for (const b of balloons) {
+      if (b.hitFlash > 0) b.hitFlash = Math.max(0, b.hitFlash - dt);
+      if (b.frozen > 0) b.frozen = Math.max(0, b.frozen - dt);
+      const s = Math.min(globalSlow, b.frozen > 0 ? 0.4 : 1);
+      if (b.color === 'orange') {
+        b.life += dt;
+        if (b.life > b.upDelay) {
+          const phase = b.life - b.upDelay;
+          b.vy -= 70 * Math.pow(1.9, phase) * dt;
+          b.vx *= Math.pow(0.5, dt);
+        }
+        b.x += b.vx * dt * s;
+        b.y += b.vy * dt * s;
+        if (b.y - b.r <= cloudY() + 10) escape(b);
+        else if ((b.vx > 0 && b.x - b.r > W + 6) || (b.vx < 0 && b.x + b.r < -6)) escape(b);
+      } else {
+        b.sway += b.swaySpeed * dt * s;
+        b.x = b.baseX + Math.sin(b.sway) * b.swayAmp;
+        b.y += b.vy * dt * s;
+        if (b.y - b.r <= cloudY() + 10) escape(b);
+      }
+    }
+
+    if (orangeUnlocked) {
+      orangeBurstTimer -= dt;
+      if (orangeBurstTimer <= 0) scheduleOrangeBurst();
+      for (let i = orangeQueue.length - 1; i >= 0; i--) {
+        orangeQueue[i].delay -= dt;
+        if (orangeQueue[i].delay <= 0) {
+          spawnOrange(orangeQueue[i].side, orangeQueue[i].y);
+          orangeQueue.splice(i, 1);
+        }
+      }
+    }
+
+    if (combo2.thunderguard) {
+      thunderTimer -= dt;
+      if (thunderTimer <= 0) {
+        fireThunderBolt();
+        thunderTimer = 1.0 + Math.random() * 0.8;
+      }
+    }
+
+    for (let i = iceFumes.length - 1; i >= 0; i--) {
+      const f = iceFumes[i];
+      f.x += f.vx * dt;
+      f.y += f.vy * dt;
+      f.vx *= Math.pow(0.2, dt);
+      f.vy *= Math.pow(0.2, dt);
+      f.life -= dt;
+      f.r += 14 * dt;
+      if (f.life <= 0) { iceFumes.splice(i, 1); continue; }
+      let hitB = null;
+      for (const b of balloons) {
+        if (!b.alive) continue;
+        const dx = f.x - b.x, dy = f.y - b.y;
+        const rr = (f.r + b.r);
+        if (dx * dx + dy * dy < rr * rr) { hitB = b; break; }
+      }
+      if (hitB) {
+        hitB.frozen = Math.max(hitB.frozen || 0, 1.2);
+        spawnParticles(f.x, f.y, '#cfeaff', 6);
+        iceFumes.splice(i, 1);
+      }
+    }
+
+    if (upgrade.freeze) {
+      if (freezeActive) {
+        freezeTimer -= dt;
+        if (freezeTimer <= 0) {
+          freezeActive = false;
+          freezeCooldown = 9 + Math.random() * 4;
+        }
+      } else {
+        freezeCooldown -= dt;
+        if (freezeCooldown <= 0) {
+          freezeActive = true;
+          freezeTimer = 3 + Math.random() * 1.5;
+        }
+      }
+    }
+
+    for (const a of arrows) {
+      if (a.random && !a.thunder) {
+        a.curvature += (Math.random() - 0.5) * 8 * dt;
+        a.curvature = Math.max(-4, Math.min(4, a.curvature));
+        const sp = Math.hypot(a.vx, a.vy);
+        const ang = Math.atan2(a.vy, a.vx) + a.curvature * dt;
+        a.vx = Math.cos(ang) * sp;
+        a.vy = Math.sin(ang) * sp;
+      }
+      if (a.seek && balloons.length) {
+        let nearest = a.target && a.target.alive && !a.hits.has(a.target) ? a.target : null;
+        if (!nearest) {
+          let nd = Infinity;
+          for (const b of balloons) {
+            if (!b.alive || a.hits.has(b)) continue;
+            const ddx = b.x - a.x, ddy = b.y - a.y;
+            const d2 = ddx * ddx + ddy * ddy;
+            if (d2 < nd) { nd = d2; nearest = b; }
+          }
+        }
+        if (nearest) {
+          const sp = Math.hypot(a.vx, a.vy);
+          const tx = nearest.x - a.x, ty = nearest.y - a.y;
+          const td = Math.hypot(tx, ty) || 1;
+          const desiredVx = (tx / td) * sp;
+          const desiredVy = (ty / td) * sp;
+          const k = 4.5 * dt;
+          a.vx += (desiredVx - a.vx) * k;
+          a.vy += (desiredVy - a.vy) * k;
+          const nsp = Math.hypot(a.vx, a.vy) || 1;
+          a.vx = a.vx / nsp * sp;
+          a.vy = a.vy / nsp * sp;
+        }
+      }
+      const dx = a.vx * dt, dy = a.vy * dt;
+      a.x += dx;
+      a.y += dy;
+      if (a.bounce) a.dist = (a.dist || 0) + Math.hypot(dx, dy);
+      a.vy += (a.bounce ? 120 : a.thunder ? 0 : a.seek ? 60 : 380) * dt;
+      if (a.thunder) {
+        a.trail.push({ x: a.x, y: a.y });
+        if (a.trail.length > 10) a.trail.shift();
+      }
+      if (a.bounce) {
+        a.trail.push({ x: a.x, y: a.y });
+        if (a.trail.length > 10) a.trail.shift();
+        let bounced = false;
+        if (a.x < 4) { a.x = 4; a.vx = Math.abs(a.vx); bounced = true; }
+        else if (a.x > W - 4) { a.x = W - 4; a.vx = -Math.abs(a.vx); bounced = true; }
+        if (a.y < 4) { a.y = 4; a.vy = Math.abs(a.vy); bounced = true; }
+        if (bounced) {
+          a.bounces++;
+          a.hits = new Set();
+          a.dieAtDist = a.dist * (combo2.stormbolt ? 1.4 : 1.2);
+          if (combo2.wildlightning) {
+            const sp = Math.hypot(a.vx, a.vy);
+            const ang = Math.atan2(a.vy, a.vx) + (Math.random() - 0.5) * Math.PI * 0.7;
+            a.vx = Math.cos(ang) * sp;
+            a.vy = Math.sin(ang) * sp;
+          }
+        }
+        if (a.dieAtDist && a.dist >= a.dieAtDist) a.alive = false;
+        if (a.bounces > (combo2.stormbolt ? 10 : 5)) a.alive = false;
+      }
+      a.angle = Math.atan2(a.vy, a.vx);
+      a.life -= dt;
+      if (a.x < -50 || a.x > W + 50 || a.y > H + 50 || a.life <= 0) a.alive = false;
+      for (const b of balloons) {
+        if (!b.alive || !a.alive) continue;
+        if (a.hits.has(b)) continue;
+        const dx = a.x - b.x, dy = a.y - b.y;
+        if (dx * dx + dy * dy < (b.r + 4) * (b.r + 4)) {
+          if (a.firework) {
+            explodeFirework(a.x, a.y, b);
+            a.alive = false;
+          } else {
+            hit(b, a);
+            a.hits.add(b);
+            if (combo2.chainlightning && a.bounce && (a.chains || 0) < 4) {
+              let next = null, nd = Infinity;
+              for (const ob of balloons) {
+                if (!ob.alive || a.hits.has(ob)) continue;
+                const odx = ob.x - a.x, ody = ob.y - a.y;
+                const od2 = odx * odx + ody * ody;
+                if (od2 < nd) { nd = od2; next = ob; }
+              }
+              if (next) {
+                const sp = Math.hypot(a.vx, a.vy);
+                const tx = next.x - a.x, ty = next.y - a.y;
+                const td = Math.hypot(tx, ty) || 1;
+                a.vx = tx / td * sp;
+                a.vy = ty / td * sp;
+                a.chains = (a.chains || 0) + 1;
+              } else if (!a.fire) {
+                a.alive = false;
+              }
+            } else if (!a.fire) {
+              a.alive = false;
+            }
+          }
+        }
+      }
+    }
+
+    for (const p of particles) {
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+      p.vy += 600 * dt;
+      p.life -= dt;
+    }
+    for (const p of popups) {
+      p.y += p.vy * dt;
+      p.vy *= 0.96;
+      p.life -= dt;
+    }
+
+    balloons = balloons.filter(b => b.alive);
+    arrows = arrows.filter(a => a.alive);
+    particles = particles.filter(p => p.life > 0);
+    popups = popups.filter(p => p.life > 0);
+
+    scoreEl.textContent = 'Score: ' + score + '  ❤'.repeat(Math.max(0, lives));
+    bestEl.textContent = 'Best: ' + Math.max(getBest(mode), score);
+    if (combo >= 2) {
+      comboEl.textContent = 'Combo x' + combo;
+    } else {
+      comboEl.textContent = '';
+    }
+    updateProgress();
+  }
+
+  const progressEl = document.getElementById('progress');
+  const progressNameEl = document.getElementById('progressName');
+  const progressNumsEl = document.getElementById('progressNums');
+  const progressFillEl = document.getElementById('progressFill');
+  function updateProgress() {
+    if (mode !== 'modded' || !settings.upgrades || !anyUpgradeAvailable()) {
+      progressEl.classList.add('hidden');
+      return;
+    }
+    const nextTier = tiersOffered + 1;
+    const to = milestoneFor(nextTier);
+    const from = tiersOffered === 0 ? 0 : milestoneFor(tiersOffered);
+    const cur = Math.max(0, Math.min(to - from, score - from));
+    progressEl.classList.remove('hidden');
+    progressNameEl.textContent = 'Upgrade ' + nextTier;
+    progressNumsEl.textContent = cur + ' / ' + (to - from);
+    progressFillEl.style.width = (cur / (to - from) * 100) + '%';
+  }
+
+  function drawSky() {
+    const g = ctx.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, '#0b1d3a');
+    g.addColorStop(0.4, '#3a6fb0');
+    g.addColorStop(1, '#a9d8ff');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, W, H);
+
+    ctx.fillStyle = 'rgba(255,255,255,0.7)';
+    for (let i = 0; i < 30; i++) {
+      const x = (i * 53) % W;
+      const y = (i * 37) % (H * 0.3);
+      ctx.fillRect(x, y, 1.5, 1.5);
+    }
+  }
+
+  function drawClouds() {
+    ctx.save();
+    for (const c of clouds) {
+      const grad = ctx.createRadialGradient(c.x, c.y, c.r * 0.2, c.x, c.y, c.r);
+      grad.addColorStop(0, 'rgba(255,255,255,0.95)');
+      grad.addColorStop(1, 'rgba(255,255,255,0.55)');
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(c.x - c.r * 0.6, c.y + 6, c.r * 0.7, 0, Math.PI * 2);
+      ctx.arc(c.x, c.y, c.r, 0, Math.PI * 2);
+      ctx.arc(c.x + c.r * 0.7, c.y + 4, c.r * 0.75, 0, Math.PI * 2);
+      ctx.arc(c.x + c.r * 0.2, c.y - c.r * 0.4, c.r * 0.6, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  function drawBalloon(b) {
+    const c = COLORS[b.color];
+    ctx.save();
+    ctx.translate(b.x, b.y);
+    ctx.beginPath();
+    ctx.moveTo(0, b.r);
+    ctx.bezierCurveTo(-2, b.r + 12, 4, b.r + 14, 0, b.r + 22);
+    ctx.strokeStyle = 'rgba(0,0,0,0.45)';
+    ctx.lineWidth = 1.2;
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.ellipse(0, 0, b.r * 0.95, b.r * 1.15, 0, 0, Math.PI * 2);
+    ctx.fillStyle = c.fill;
+    ctx.fill();
+    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = c.stroke;
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.ellipse(-b.r * 0.3, -b.r * 0.4, b.r * 0.25, b.r * 0.4, -0.4, 0, Math.PI * 2);
+    ctx.fillStyle = c.shine;
+    ctx.globalAlpha = 0.85;
+    ctx.fill();
+    ctx.globalAlpha = 1;
+
+    ctx.beginPath();
+    ctx.moveTo(-3, b.r * 1.1);
+    ctx.lineTo(0, b.r * 1.25);
+    ctx.lineTo(3, b.r * 1.1);
+    ctx.closePath();
+    ctx.fillStyle = c.stroke;
+    ctx.fill();
+
+    if (b.color === 'purple') {
+      ctx.fillStyle = '#ff6b9a';
+      ctx.font = 'bold 16px -apple-system, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('♥', 0, 1);
+    }
+    if (b.color === 'black' && b.hp >= 2) {
+      ctx.fillStyle = 'rgba(255,255,255,0.85)';
+      ctx.font = 'bold 14px -apple-system, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('×2', 0, 1);
+    }
+    if (b.color === 'white') {
+      ctx.strokeStyle = 'rgba(120,130,150,0.55)';
+      ctx.lineWidth = 1;
+      for (let i = 1; i <= b.hp; i++) {
+        const f = i / 5;
+        ctx.beginPath();
+        ctx.ellipse(0, 0, b.r * 0.95 * f, b.r * 1.15 * f, 0, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      ctx.fillStyle = 'rgba(60,70,90,0.85)';
+      ctx.font = 'bold 13px -apple-system, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('×' + b.hp, 0, 1);
+    }
+    if (b.hitFlash > 0) {
+      ctx.globalAlpha = Math.min(1, b.hitFlash * 4);
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.ellipse(0, 0, b.r * 0.95, b.r * 1.15, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+    if (freezeActive || b.frozen > 0) {
+      ctx.globalAlpha = freezeActive ? 0.55 : Math.min(0.7, b.frozen / 4);
+      ctx.fillStyle = 'rgba(180,220,255,0.6)';
+      ctx.beginPath();
+      ctx.ellipse(0, 0, b.r * 0.95, b.r * 1.15, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(220,240,255,0.9)';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
+    ctx.restore();
+  }
+
+  function drawArrow(a) {
+    if (a.firework) {
+      ctx.save();
+      ctx.translate(a.x, a.y);
+      const flicker = 0.7 + Math.random() * 0.3;
+      ctx.globalAlpha = flicker;
+      ctx.fillStyle = '#ffe26d';
+      ctx.beginPath();
+      ctx.arc(0, 0, 6, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#ff6b9a';
+      ctx.beginPath();
+      ctx.arc(-Math.cos(a.angle) * 6, -Math.sin(a.angle) * 6, 4, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#fff3a3';
+      ctx.beginPath();
+      ctx.arc(0, 0, 2.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+      ctx.restore();
+      return;
+    }
+    if ((a.bounce || a.thunder) && a.trail.length > 1) {
+      ctx.save();
+      ctx.strokeStyle = 'rgba(140,200,255,0.85)';
+      ctx.lineWidth = 3;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(a.trail[0].x, a.trail[0].y);
+      for (let i = 1; i < a.trail.length; i++) {
+        const t = a.trail[i];
+        const jx = (Math.random() - 0.5) * 4;
+        const jy = (Math.random() - 0.5) * 4;
+        ctx.lineTo(t.x + jx, t.y + jy);
+      }
+      ctx.stroke();
+      ctx.restore();
+    }
+    ctx.save();
+    ctx.translate(a.x, a.y);
+    ctx.rotate(a.angle);
+    if (a.bounce) {
+      ctx.fillStyle = 'rgba(170,220,255,0.6)';
+      ctx.beginPath();
+      ctx.ellipse(-4, 0, 14, 5, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    if (a.fire) {
+      const flicker = 0.7 + Math.random() * 0.3;
+      ctx.globalAlpha = flicker;
+      ctx.fillStyle = '#ffb347';
+      ctx.beginPath();
+      ctx.ellipse(-12, 0, 16, 6, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#ff5722';
+      ctx.beginPath();
+      ctx.ellipse(-6, 0, 12, 4, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#fff3a3';
+      ctx.beginPath();
+      ctx.ellipse(0, 0, 6, 2, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+    ctx.fillStyle = a.fire ? '#5b2a0a' : '#7a4a1f';
+    ctx.fillRect(-22, -1.5, 32, 3);
+    ctx.fillStyle = a.fire ? '#ffd166' : '#cfd8dc';
+    ctx.beginPath();
+    ctx.moveTo(10, 0);
+    ctx.lineTo(2, -5);
+    ctx.lineTo(2, 5);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = a.fire ? '#ff5722' : '#e74c3c';
+    ctx.beginPath();
+    ctx.moveTo(-22, 0);
+    ctx.lineTo(-30, -5);
+    ctx.lineTo(-26, 0);
+    ctx.lineTo(-30, 5);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  }
+
+  function drawBow() {
+    let angle = -Math.PI / 2;
+    let pull = 0;
+    if (aiming && aimStart && aimNow) {
+      const dx = aimStart.x - aimNow.x;
+      const dy = aimStart.y - aimNow.y;
+      angle = Math.atan2(dy, dx);
+      pull = Math.min(1, Math.hypot(dx, dy) / 140);
+    }
+    ctx.save();
+    ctx.translate(bow.x, bow.y);
+    ctx.rotate(angle + Math.PI / 2);
+
+    ctx.strokeStyle = '#5b3a1a';
+    ctx.lineWidth = 5;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.arc(0, 0, 32, -Math.PI * 0.7, -Math.PI * 0.3);
+    ctx.stroke();
+
+    ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+    ctx.lineWidth = 1.5;
+    const tipAx = Math.cos(-Math.PI * 0.7) * 32;
+    const tipAy = Math.sin(-Math.PI * 0.7) * 32;
+    const tipBx = Math.cos(-Math.PI * 0.3) * 32;
+    const tipBy = Math.sin(-Math.PI * 0.3) * 32;
+    const pullBack = pull * 28;
+    ctx.beginPath();
+    ctx.moveTo(tipAx, tipAy);
+    ctx.lineTo(0, pullBack);
+    ctx.lineTo(tipBx, tipBy);
+    ctx.stroke();
+
+    if (pull > 0.05) {
+      ctx.save();
+      ctx.translate(0, pullBack - 22);
+      ctx.fillStyle = '#7a4a1f';
+      ctx.fillRect(-1.5, -10, 3, 32);
+      ctx.fillStyle = '#cfd8dc';
+      ctx.beginPath();
+      ctx.moveTo(0, -18);
+      ctx.lineTo(-5, -8);
+      ctx.lineTo(5, -8);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+    }
+    ctx.restore();
+
+    if (aiming && aimStart && aimNow) {
+      const dx = aimStart.x - aimNow.x;
+      const dy = aimStart.y - aimNow.y;
+      const ang = Math.atan2(dy, dx);
+      ctx.save();
+      ctx.strokeStyle = 'rgba(255,255,255,0.45)';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([6, 8]);
+      ctx.beginPath();
+      ctx.moveTo(bow.x, bow.y - 20);
+      ctx.lineTo(bow.x + Math.cos(ang) * 220, bow.y - 20 + Math.sin(ang) * 220);
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+
+  function drawCloudLine() {
+    const y = cloudY();
+    ctx.save();
+    ctx.strokeStyle = 'rgba(255,255,255,0.25)';
+    ctx.setLineDash([6, 10]);
+    ctx.beginPath();
+    ctx.moveTo(0, y + 20);
+    ctx.lineTo(W, y + 20);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function draw() {
+    drawSky();
+    drawCloudLine();
+    for (const b of balloons) drawBalloon(b);
+    for (const a of arrows) drawArrow(a);
+    for (const p of particles) {
+      ctx.globalAlpha = Math.max(0, p.life);
+      ctx.fillStyle = p.color;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+    for (const f of iceFumes) {
+      const alpha = Math.max(0, Math.min(1, f.life * 1.2)) * 0.7;
+      const grad = ctx.createRadialGradient(f.x, f.y, f.r * 0.15, f.x, f.y, f.r);
+      grad.addColorStop(0, 'rgba(220,240,255,' + alpha.toFixed(3) + ')');
+      grad.addColorStop(1, 'rgba(180,220,255,0)');
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(f.x, f.y, f.r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    drawClouds();
+    drawBow();
+
+    for (const p of popups) {
+      ctx.globalAlpha = Math.max(0, Math.min(1, p.life));
+      ctx.fillStyle = p.color;
+      ctx.font = 'bold 20px -apple-system, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(p.text, p.x, p.y);
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  let last = 0;
+  function loop(ts) {
+    if (!last) last = ts;
+    const dt = Math.min(0.05, (ts - last) / 1000);
+    last = ts;
+    if (running) update(dt);
+    draw();
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
+
+  function getPos(e) {
+    const t = e.touches ? e.touches[0] : e;
+    return { x: t.clientX, y: t.clientY };
+  }
+
+  function onStart(e) {
+    if (!running) return;
+    e.preventDefault();
+    aiming = true;
+    aimStart = getPos(e);
+    aimNow = aimStart;
+    hintEl.style.opacity = '0';
+  }
+  function onMove(e) {
+    if (!aiming) return;
+    e.preventDefault();
+    aimNow = getPos(e);
+  }
+  function onEnd(e) {
+    if (!aiming) return;
+    e.preventDefault();
+    const dx = aimStart.x - aimNow.x;
+    const dy = aimStart.y - aimNow.y;
+    const dist = Math.hypot(dx, dy);
+    if (dist > 14) {
+      const angle = Math.atan2(dy, dx);
+      const power = Math.min(1, dist / 140);
+      shootArrow(angle, power);
+    }
+    aiming = false;
+    aimStart = aimNow = null;
+  }
+
+  canvas.addEventListener('touchstart', onStart, { passive: false });
+  canvas.addEventListener('touchmove', onMove, { passive: false });
+  canvas.addEventListener('touchend', onEnd, { passive: false });
+  canvas.addEventListener('touchcancel', onEnd, { passive: false });
+  canvas.addEventListener('mousedown', onStart);
+  canvas.addEventListener('mousemove', onMove);
+  canvas.addEventListener('mouseup', onEnd);
+
+  function startGame() {
+    balloons = []; arrows = []; particles = []; popups = [];
+    score = 0; combo = 0; comboTimer = 0; elapsed = 0;
+    spawnTimer = 0.5; spawnInterval = 1.1; lives = 5;
+    nextLifeThreshold = 100;
+    upgrade.pierce = upgrade.double = upgrade.extra = upgrade.bounce = false;
+    upgrade.sides = upgrade.seek = upgrade.freeze = upgrade.random = false;
+    combo2.firebolt = combo2.thunderguard = combo2.stormbolt = combo2.freezeburn = combo2.firework = combo2.icefumer = false;
+    combo2.chainlightning = combo2.twinhunters = combo2.wildlightning = combo2.pinball = combo2.ghostvolley = false;
+    thunderTimer = 0;
+    iceFumes = [];
+    freezeChance = 0.10;
+    freezeActive = false;
+    freezeTimer = 0;
+    freezeCooldown = 0;
+    tiersOffered = 0;
+    whiteUnlocked = false;
+    blackUnlocked = false;
+    metalUnlocked = false;
+    metalCooldown = 0;
+    greenRemoved = false;
+    orangeUnlocked = false;
+    orangeBurstTimer = 0;
+    orangeQueue = [];
+    rebuildWeights();
+    running = true; last = 0;
+    startOverlay.classList.add('hidden');
+    overOverlay.classList.add('hidden');
+    upgradeOverlay.classList.add('hidden');
+    hintEl.style.opacity = '1';
+    requestAnimationFrame(resize);
+  }
+
+  function endGame() {
+    running = false;
+    const prevBest = getBest(mode);
+    if (score > prevBest) setBest(mode, score);
+    const newBest = Math.max(prevBest, score);
+    finalScoreEl.textContent = 'Score: ' + score + ' (' + (mode === 'modded' ? 'Modded' : 'Original') + ')';
+    finalBestEl.textContent = 'Best: ' + newBest;
+    overOverlay.classList.remove('hidden');
+    progressEl.classList.add('hidden');
+  }
+
+  startBtn.addEventListener('click', startGame);
+  retryBtn.addEventListener('click', startGame);
+  for (const el of document.querySelectorAll('#start .mode')) {
+    el.addEventListener('click', () => setMode(el.dataset.mode));
+  }
+  applyModeUI();
+})();
+</script>
+</body>
+</html>
