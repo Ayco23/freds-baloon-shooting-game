@@ -24,17 +24,20 @@
   #score { font-size: 22px; }
   #combo { font-size: 14px; opacity: 0.85; }
   .overlay {
-    position: absolute; inset: 0; display: flex; flex-direction: column;
+    position: fixed; inset: 0; display: flex; flex-direction: column;
     justify-content: center; align-items: center; text-align: center;
-    color: #fff; padding: 24px;
+    color: #fff; padding: 24px; overflow: auto;
     background: radial-gradient(ellipse at center, rgba(11,29,58,0.6), rgba(11,29,58,0.95));
     backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
   }
-  .overlay h1 { font-size: 36px; margin-bottom: 12px; letter-spacing: 0.5px; }
-  .overlay p { font-size: 16px; opacity: 0.9; margin-bottom: 8px; line-height: 1.5; max-width: 320px; }
-  .legend { display: flex; gap: 14px; margin: 16px 0; }
-  .legend div { display: flex; flex-direction: column; align-items: center; gap: 6px; font-size: 13px; }
-  .swatch { width: 28px; height: 32px; border-radius: 50%; box-shadow: 0 4px 8px rgba(0,0,0,0.3); }
+  .overlay h1 { font-size: 32px; margin-bottom: 10px; letter-spacing: 0.5px; }
+  .overlay p { font-size: 15px; opacity: 0.9; margin-bottom: 6px; line-height: 1.45; max-width: 300px; }
+  .legend {
+    display: flex; flex-wrap: wrap; justify-content: center;
+    gap: 10px 14px; margin: 14px 0; max-width: 300px;
+  }
+  .legend div { display: flex; flex-direction: column; align-items: center; gap: 6px; font-size: 12px; min-width: 56px; }
+  .swatch { width: 26px; height: 30px; border-radius: 50%; box-shadow: 0 4px 8px rgba(0,0,0,0.3); }
   .gold   { background: radial-gradient(circle at 35% 30%, #fff7c4, #f5c518 60%, #b8860b); }
   .blue   { background: radial-gradient(circle at 35% 30%, #cfe6ff, #2e8bff 60%, #144a99); }
   .green  { background: radial-gradient(circle at 35% 30%, #d4f5cf, #3fbf52 60%, #1f6b2a); }
@@ -104,16 +107,22 @@
   let W = 0, H = 0;
   function resize() {
     DPR = Math.min(window.devicePixelRatio || 1, 2);
-    W = window.innerWidth;
-    H = window.innerHeight;
+    const vv = window.visualViewport;
+    W = Math.round(vv ? vv.width : window.innerWidth);
+    H = Math.round(vv ? vv.height : window.innerHeight);
     canvas.width = Math.floor(W * DPR);
     canvas.height = Math.floor(H * DPR);
     canvas.style.width = W + 'px';
     canvas.style.height = H + 'px';
     ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    placeBow();
+    makeClouds();
   }
   window.addEventListener('resize', resize);
-  resize();
+  window.addEventListener('orientationchange', resize);
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', resize);
+  }
 
   const COLORS = {
     gold:   { fill: '#f5c518', stroke: '#9c7a04', shine: '#fff7c4', points: 20, weight: 1 },
@@ -149,10 +158,8 @@
   const bow = { x: 0, y: 0, w: 70, drawW: 70 };
   function placeBow() {
     bow.x = W / 2;
-    bow.y = H - 70 - (parseInt(getComputedStyle(document.body).getPropertyValue('padding-bottom')) || 0);
+    bow.y = H - 70;
   }
-  placeBow();
-  window.addEventListener('resize', placeBow);
 
   const cloudY = () => Math.max(110, H * 0.18);
 
@@ -165,8 +172,8 @@
       x += 70 + Math.random() * 40;
     }
   }
-  makeClouds();
-  window.addEventListener('resize', makeClouds);
+
+  resize();
 
   function pickColorKey() {
     return WEIGHTED[Math.floor(Math.random() * WEIGHTED.length)];
@@ -582,6 +589,7 @@
     startOverlay.classList.add('hidden');
     overOverlay.classList.add('hidden');
     hintEl.style.opacity = '1';
+    requestAnimationFrame(resize);
   }
 
   function endGame() {
