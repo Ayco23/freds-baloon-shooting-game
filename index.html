@@ -436,8 +436,10 @@
     }
 
     for (const a of arrows) {
-      a.x += a.vx * dt;
-      a.y += a.vy * dt;
+      const dx = a.vx * dt, dy = a.vy * dt;
+      a.x += dx;
+      a.y += dy;
+      if (a.bounce) a.dist = (a.dist || 0) + Math.hypot(dx, dy);
       a.vy += (a.bounce ? 120 : 380) * dt;
       if (a.bounce) {
         a.trail.push({ x: a.x, y: a.y });
@@ -446,7 +448,12 @@
         if (a.x < 4) { a.x = 4; a.vx = Math.abs(a.vx); bounced = true; }
         else if (a.x > W - 4) { a.x = W - 4; a.vx = -Math.abs(a.vx); bounced = true; }
         if (a.y < 4) { a.y = 4; a.vy = Math.abs(a.vy); bounced = true; }
-        if (bounced) { a.bounces++; a.hits = new Set(); }
+        if (bounced) {
+          a.bounces++;
+          a.hits = new Set();
+          a.dieAtDist = a.dist * 1.2;
+        }
+        if (a.dieAtDist && a.dist >= a.dieAtDist) a.alive = false;
         if (a.bounces > 5) a.alive = false;
       }
       a.angle = Math.atan2(a.vy, a.vx);
