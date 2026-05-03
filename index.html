@@ -70,6 +70,12 @@
   }
   .choice.combined .name { color: #b6f5b6; }
   .choice.combined .desc { color: #d8f5d8; opacity: 1; }
+  .choice.rare {
+    background: rgba(140,200,255,0.16); border-color: #8cd0ff;
+    box-shadow: 0 0 0 2px rgba(140,200,255,0.25), 0 4px 14px rgba(140,200,255,0.25);
+  }
+  .choice.rare .name { color: #d6ecff; }
+  .choice.rare .desc { color: #e6f3ff; opacity: 1; }
   .settings { display: flex; flex-direction: column; gap: 10px; margin: 14px 0 4px; width: 280px; }
   .modes { display: flex; gap: 10px; width: 280px; margin: 14px 0 4px; }
   .mode {
@@ -250,9 +256,18 @@
   let elapsed = 0;
   let lives = 5;
   let nextLifeThreshold = 100;
-  const upgrade = { pierce: false, double: false, extra: false, bounce: false, sides: false, seek: false };
+  const upgrade = { pierce: false, double: false, extra: false, bounce: false, sides: false, seek: false, freeze: false };
   const combo2 = { firebolt: false, thunderguard: false, stormbolt: false };
   let thunderTimer = 0;
+  let freezeChance = 0.05;
+  let freezeActive = false;
+  let freezeTimer = 0;
+  let freezeCooldown = 0;
+  const FREEZE_UPGRADE = {
+    key: 'freeze', icon: '❄️', name: 'Freeze',
+    desc: 'Rare: every once in a while, every balloon on screen gets a frost layer that slows their movement.',
+    rare: true,
+  };
   let tiersOffered = 0;
   function milestoneFor(tier) {
     const fixed = [100, 500, 800, 1200, 1600, 2000];
@@ -524,10 +539,14 @@
   function offerUpgrade(tier) {
     running = false;
     let base;
-    if (tier === 1) base = TIER1;
-    else if (tier === 2) base = TIER2;
-    else if (tier === 3) base = TIER3;
+    if (tier === 1) base = TIER1.slice();
+    else if (tier === 2) base = TIER2.slice();
+    else if (tier === 3) base = TIER3.slice();
     else base = [...TIER1, ...TIER2, ...TIER3].filter(c => !upgrade[c.key]);
+    if (!upgrade.freeze && base.length > 0 && Math.random() < freezeChance) {
+      const idx = Math.floor(Math.random() * base.length);
+      base[idx] = FREEZE_UPGRADE;
+    }
     const eligibleCombined = COMBINED
       .filter(c => !combo2[c.key] && c.requires.every(r => upgrade[r]))
       .map(c => Object.assign({ combined: true }, c));
@@ -541,7 +560,7 @@
     upgradeChoicesEl.innerHTML = '';
     for (const c of choices) {
       const el = document.createElement('div');
-      el.className = 'choice' + (c.combined ? ' combined' : '');
+      el.className = 'choice' + (c.combined ? ' combined' : '') + (c.rare ? ' rare' : '');
       el.dataset.choice = c.key;
       el.innerHTML =
         '<div class="icon">' + c.icon + '</div>' +
@@ -559,7 +578,9 @@
       if (key === 'thunderguard') thunderTimer = 4;
     } else {
       upgrade[key] = true;
+      if (key === 'freeze') freezeCooldown = 6;
     }
+    if (!upgrade.freeze) freezeChance = Math.min(1.0, freezeChance + 0.05);
     upgradeOverlay.classList.add('hidden');
     running = true;
     last = 0;
@@ -612,6 +633,7 @@
       if (c.x - c.r > W + 30) c.x = -c.r - 30;
     }
 
+    const slow = freezeActive ? 0.3 : 1;
     for (const b of balloons) {
       if (b.hitFlash > 0) b.hitFlash = Math.max(0, b.hitFlash - dt);
       if (b.color === 'orange') {
@@ -621,14 +643,14 @@
           b.vy -= 70 * Math.pow(1.9, phase) * dt;
           b.vx *= Math.pow(0.5, dt);
         }
-        b.x += b.vx * dt;
-        b.y += b.vy * dt;
+        b.x += b.vx * dt * slow;
+        b.y += b.vy * dt * slow;
         if (b.y - b.r <= cloudY() + 10) escape(b);
         else if ((b.vx > 0 && b.x - b.r > W + 6) || (b.vx < 0 && b.x + b.r < -6)) escape(b);
       } else {
-        b.sway += b.swaySpeed * dt;
+        b.sway += b.swaySpeed * dt * slow;
         b.x = b.baseX + Math.sin(b.sway) * b.swayAmp;
-        b.y += b.vy * dt;
+        b.y += b.vy * dt * slow;
         if (b.y - b.r <= cloudY() + 10) escape(b);
       }
     }
@@ -650,6 +672,23 @@
       if (thunderTimer <= 0) {
         fireThunderBolt();
         thunderTimer = 1.0 + Math.random() * 0.8;
+      }
+    }
+
+    if (upgrade.freeze) {
+      if (freezeActive) {
+        freezeTimer -= dt;
+        if (freezeTimer <= 0) {
+          freezeActive = false;
+          freezeCooldown = 9 + Math.random() * 4;
+        }
+      } else {
+        freezeCooldown -= dt;
+        if (freezeCooldown <= 0) {
+          freezeActive = true;
+          freezeTimer = 3 + Math.random() * 1.5;
+          popups.push({ x: W / 2, y: H / 2, text: '❄ FROST ❄', color: '#cfeaff', life: 1.4, vy: -10 });
+        }
       }
     }
 
@@ -863,6 +902,17 @@
       ctx.beginPath();
       ctx.ellipse(0, 0, b.r * 0.95, b.r * 1.15, 0, 0, Math.PI * 2);
       ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+    if (freezeActive) {
+      ctx.globalAlpha = 0.55;
+      ctx.fillStyle = 'rgba(180,220,255,0.6)';
+      ctx.beginPath();
+      ctx.ellipse(0, 0, b.r * 0.95, b.r * 1.15, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(220,240,255,0.9)';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
       ctx.globalAlpha = 1;
     }
     ctx.restore();
@@ -1092,9 +1142,13 @@
     spawnTimer = 0.5; spawnInterval = 1.1; lives = 5;
     nextLifeThreshold = 100;
     upgrade.pierce = upgrade.double = upgrade.extra = upgrade.bounce = false;
-    upgrade.sides = upgrade.seek = false;
+    upgrade.sides = upgrade.seek = upgrade.freeze = false;
     combo2.firebolt = combo2.thunderguard = combo2.stormbolt = false;
     thunderTimer = 0;
+    freezeChance = 0.05;
+    freezeActive = false;
+    freezeTimer = 0;
+    freezeCooldown = 0;
     tiersOffered = 0;
     whiteUnlocked = false;
     blackUnlocked = false;
