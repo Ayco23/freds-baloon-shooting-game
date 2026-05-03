@@ -35,9 +35,10 @@
   .legend { display: flex; gap: 14px; margin: 16px 0; }
   .legend div { display: flex; flex-direction: column; align-items: center; gap: 6px; font-size: 13px; }
   .swatch { width: 28px; height: 32px; border-radius: 50%; box-shadow: 0 4px 8px rgba(0,0,0,0.3); }
-  .gold  { background: radial-gradient(circle at 35% 30%, #fff7c4, #f5c518 60%, #b8860b); }
-  .blue  { background: radial-gradient(circle at 35% 30%, #cfe6ff, #2e8bff 60%, #144a99); }
-  .green { background: radial-gradient(circle at 35% 30%, #d4f5cf, #3fbf52 60%, #1f6b2a); }
+  .gold   { background: radial-gradient(circle at 35% 30%, #fff7c4, #f5c518 60%, #b8860b); }
+  .blue   { background: radial-gradient(circle at 35% 30%, #cfe6ff, #2e8bff 60%, #144a99); }
+  .green  { background: radial-gradient(circle at 35% 30%, #d4f5cf, #3fbf52 60%, #1f6b2a); }
+  .purple { background: radial-gradient(circle at 35% 30%, #f1d6ff, #a64bff 60%, #4b148f); }
   button {
     margin-top: 18px; font-size: 18px; font-weight: 700; padding: 14px 28px;
     border: none; border-radius: 999px; color: #0b1d3a;
@@ -69,9 +70,11 @@
     <div><span class="swatch gold"></span><span>Gold · 20</span></div>
     <div><span class="swatch blue"></span><span>Blue · 10</span></div>
     <div><span class="swatch green"></span><span>Green · 5</span></div>
+    <div><span class="swatch purple"></span><span>Purple · +1 ❤</span></div>
   </div>
   <p>Drag anywhere on the screen to aim your bow.<br/>Release to fire an arrow.</p>
   <p>If a balloon escapes into the clouds, you lose its points!</p>
+  <p>Every 100 points a purple balloon appears — pop it to gain a life!</p>
   <button id="startBtn">Start Game</button>
 </div>
 
@@ -113,13 +116,13 @@
   resize();
 
   const COLORS = {
-    gold:  { fill: '#f5c518', stroke: '#9c7a04', shine: '#fff7c4', points: 20, weight: 1 },
-    blue:  { fill: '#2e8bff', stroke: '#144a99', shine: '#cfe6ff', points: 10, weight: 3 },
-    green: { fill: '#3fbf52', stroke: '#1f6b2a', shine: '#d4f5cf', points: 5,  weight: 6 },
+    gold:   { fill: '#f5c518', stroke: '#9c7a04', shine: '#fff7c4', points: 20, weight: 1 },
+    blue:   { fill: '#2e8bff', stroke: '#144a99', shine: '#cfe6ff', points: 10, weight: 3 },
+    green:  { fill: '#3fbf52', stroke: '#1f6b2a', shine: '#d4f5cf', points: 5,  weight: 6 },
+    purple: { fill: '#a64bff', stroke: '#4b148f', shine: '#f1d6ff', points: 0,  weight: 0, life: 1 },
   };
-  const COLOR_KEYS = Object.keys(COLORS);
   const WEIGHTED = [];
-  for (const k of COLOR_KEYS) for (let i = 0; i < COLORS[k].weight; i++) WEIGHTED.push(k);
+  for (const k of Object.keys(COLORS)) for (let i = 0; i < COLORS[k].weight; i++) WEIGHTED.push(k);
 
   let balloons = [];
   let arrows = [];
@@ -136,6 +139,8 @@
   let spawnInterval = 1.1;
   let elapsed = 0;
   let lives = 5;
+  let nextLifeThreshold = 100;
+  const MAX_LIVES = 9;
 
   let aiming = false;
   let aimStart = null;
@@ -167,13 +172,14 @@
     return WEIGHTED[Math.floor(Math.random() * WEIGHTED.length)];
   }
 
-  function spawnBalloon() {
-    const key = pickColorKey();
-    const r = key === 'gold' ? 20 : (key === 'blue' ? 24 : 26);
+  function spawnBalloon(forcedKey) {
+    const key = forcedKey || pickColorKey();
+    const r = key === 'gold' ? 20 : (key === 'blue' ? 24 : key === 'purple' ? 22 : 26);
     const x = 30 + Math.random() * (W - 60);
     const y = H + r + 30;
     const baseSpeed = 50 + elapsed * 1.2;
-    const speed = baseSpeed * (key === 'gold' ? 1.4 : key === 'blue' ? 1.1 : 0.9) + Math.random() * 20;
+    const speedMul = key === 'gold' ? 1.4 : key === 'blue' ? 1.1 : key === 'purple' ? 1.25 : 0.9;
+    const speed = baseSpeed * speedMul + Math.random() * 20;
     balloons.push({
       x, y, r, color: key, vy: -speed,
       sway: Math.random() * Math.PI * 2,
@@ -197,16 +203,30 @@
   function pop(b) {
     b.alive = false;
     const c = COLORS[b.color];
+    if (c.life) {
+      if (lives < MAX_LIVES) lives += c.life;
+      spawnParticles(b.x, b.y, c.fill, 26);
+      popups.push({ x: b.x, y: b.y, text: '+1 ❤', color: c.fill, life: 1.1, vy: -40 });
+      return;
+    }
     score += c.points;
     combo += 1;
     comboTimer = 1.5;
     spawnParticles(b.x, b.y, c.fill, 18);
     popups.push({ x: b.x, y: b.y, text: '+' + c.points, color: c.fill, life: 0.9, vy: -40 });
+    while (score >= nextLifeThreshold) {
+      spawnBalloon('purple');
+      nextLifeThreshold += 100;
+    }
   }
 
   function escape(b) {
     b.alive = false;
     const c = COLORS[b.color];
+    if (c.life) {
+      spawnParticles(b.x, b.y, c.fill, 6);
+      return;
+    }
     score = Math.max(0, score - c.points);
     lives -= 1;
     combo = 0;
@@ -363,6 +383,14 @@
     ctx.closePath();
     ctx.fillStyle = c.stroke;
     ctx.fill();
+
+    if (b.color === 'purple') {
+      ctx.fillStyle = '#ff6b9a';
+      ctx.font = 'bold 16px -apple-system, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('♥', 0, 1);
+    }
     ctx.restore();
   }
 
@@ -549,6 +577,7 @@
     balloons = []; arrows = []; particles = []; popups = [];
     score = 0; combo = 0; comboTimer = 0; elapsed = 0;
     spawnTimer = 0.5; spawnInterval = 1.1; lives = 5;
+    nextLifeThreshold = 100;
     running = true; last = 0;
     startOverlay.classList.add('hidden');
     overOverlay.classList.add('hidden');
