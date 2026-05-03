@@ -377,23 +377,27 @@
   }
 
   function fireThunderBolt() {
-    const candidates = balloons.filter(b => b.alive);
-    if (!candidates.length) return;
-    const target = candidates[Math.floor(Math.random() * candidates.length)];
-    const x = 30 + Math.random() * (W - 60);
-    const y = H + 10;
-    const dx = target.x - x, dy = target.y - y;
-    const d = Math.hypot(dx, dy) || 1;
-    const speed = 850;
-    arrows.push({
-      x, y,
-      vx: dx / d * speed,
-      vy: dy / d * speed,
-      angle: Math.atan2(dy, dx), alive: true, life: 1.6,
-      fire: false, bounce: false, bounces: 0,
-      seek: true, thunder: true,
-      hits: new Set(), trail: [],
-    });
+    const live = balloons.filter(b => b.alive);
+    if (!live.length) return;
+    const sorted = live.slice().sort((a, b) => (a.y - a.r) - (b.y - b.r));
+    const targets = sorted.slice(0, Math.min(3, sorted.length));
+    for (let i = 0; i < targets.length; i++) {
+      const target = targets[i];
+      const x = 30 + Math.random() * (W - 60);
+      const y = H + 10;
+      const dx = target.x - x, dy = target.y - y;
+      const d = Math.hypot(dx, dy) || 1;
+      const speed = 950;
+      arrows.push({
+        x, y,
+        vx: dx / d * speed,
+        vy: dy / d * speed,
+        angle: Math.atan2(dy, dx), alive: true, life: 1.8,
+        fire: true, bounce: false, bounces: 0,
+        seek: true, thunder: true,
+        hits: new Set(), trail: [],
+      });
+    }
   }
 
   function scheduleOrangeBurst() {
@@ -531,17 +535,15 @@
 
   function offerUpgrade(tier) {
     running = false;
-    let choices;
-    if (tier === 1) choices = TIER1;
-    else if (tier === 2) choices = TIER2;
-    else if (tier === 3) choices = TIER3;
-    else {
-      const remaining = [...TIER1, ...TIER2, ...TIER3].filter(c => !upgrade[c.key]);
-      const eligibleCombined = COMBINED
-        .filter(c => !combo2[c.key] && c.requires.every(r => upgrade[r]))
-        .map(c => Object.assign({ combined: true }, c));
-      choices = [...remaining, ...eligibleCombined];
-    }
+    let base;
+    if (tier === 1) base = TIER1;
+    else if (tier === 2) base = TIER2;
+    else if (tier === 3) base = TIER3;
+    else base = [...TIER1, ...TIER2, ...TIER3].filter(c => !upgrade[c.key]);
+    const eligibleCombined = COMBINED
+      .filter(c => !combo2[c.key] && c.requires.every(r => upgrade[r]))
+      .map(c => Object.assign({ combined: true }, c));
+    const choices = [...base, ...eligibleCombined];
     if (tier >= 4 && choices.length === 0) {
       running = true; last = 0;
       return;
@@ -660,7 +662,7 @@
       thunderTimer -= dt;
       if (thunderTimer <= 0) {
         fireThunderBolt();
-        thunderTimer = 2.2 + Math.random() * 1.4;
+        thunderTimer = 1.0 + Math.random() * 0.8;
       }
     }
 
