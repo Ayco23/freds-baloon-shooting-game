@@ -235,6 +235,7 @@
   let whiteUnlocked = false;
   let blackUnlocked = false;
   let metalUnlocked = false;
+  let metalCooldown = 0;
   let greenRemoved = false;
   function rebuildWeights() {
     WEIGHTED = [];
@@ -371,7 +372,12 @@
   resize();
 
   function pickColorKey() {
-    return WEIGHTED[Math.floor(Math.random() * WEIGHTED.length)];
+    let key = WEIGHTED[Math.floor(Math.random() * WEIGHTED.length)];
+    if (key === 'metal' && metalCooldown > 0) {
+      const others = WEIGHTED.filter(k => k !== 'metal');
+      if (others.length) key = others[Math.floor(Math.random() * others.length)];
+    }
+    return key;
   }
 
   function spawnBalloon(forcedKey) {
@@ -404,6 +410,7 @@
       hitFlash: 0,
       alive: true,
     });
+    if (key === 'metal') metalCooldown = 14 + Math.random() * 8;
   }
 
   function spawnOrange(side, y) {
@@ -724,6 +731,7 @@
   function update(dt) {
     elapsed += dt;
     spawnTimer -= dt;
+    if (metalCooldown > 0) metalCooldown = Math.max(0, metalCooldown - dt);
     spawnInterval = Math.max(0.4, 1.1 - elapsed * 0.01);
     if (spawnTimer <= 0) {
       spawnBalloon();
@@ -1359,6 +1367,7 @@
     whiteUnlocked = false;
     blackUnlocked = false;
     metalUnlocked = false;
+    metalCooldown = 0;
     greenRemoved = false;
     orangeUnlocked = false;
     orangeBurstTimer = 0;
