@@ -245,6 +245,7 @@
   let tier1Offered = false;
   let tier2Offered = false;
   let tier3Offered = false;
+  let tier4Offered = false;
   const MAX_LIVES = 9;
 
   const TIER1 = [
@@ -434,6 +435,9 @@
       } else if (!tier3Offered && score >= 800) {
         tier3Offered = true;
         offerUpgrade(3);
+      } else if (!tier4Offered && score >= 1200) {
+        tier4Offered = true;
+        offerUpgrade(4);
       }
     }
   }
@@ -444,8 +448,16 @@
 
   function offerUpgrade(tier) {
     running = false;
-    const choices = tier === 1 ? TIER1 : tier === 2 ? TIER2 : TIER3;
-    const milestone = tier === 1 ? '100' : tier === 2 ? '500' : '800';
+    let choices;
+    if (tier === 1) choices = TIER1;
+    else if (tier === 2) choices = TIER2;
+    else if (tier === 3) choices = TIER3;
+    else choices = [...TIER1, ...TIER2, ...TIER3].filter(c => !upgrade[c.key]);
+    if (tier === 4 && choices.length === 0) {
+      running = true; last = 0;
+      return;
+    }
+    const milestone = tier === 1 ? '100' : tier === 2 ? '500' : tier === 3 ? '800' : '1200';
     upgradeTitleEl.textContent = milestone + ' points reached!';
     upgradeSubtitleEl.textContent = 'Pick another perk for the rest of this run.';
     upgradeChoicesEl.innerHTML = '';
@@ -623,6 +635,7 @@
     if (settings.upgrades) all.push({ at: 100, name: 'Upgrade 1', done: () => tier1Offered });
     if (settings.upgrades) all.push({ at: 500, name: 'Upgrade 2', done: () => tier2Offered });
     if (settings.upgrades) all.push({ at: 800, name: 'Upgrade 3', done: () => tier3Offered });
+    if (settings.upgrades) all.push({ at: 1200, name: 'Upgrade 4', done: () => tier4Offered });
     all.sort((a, b) => a.at - b.at);
     const next = all.find(m => !m.done());
     if (!next) {
@@ -971,7 +984,7 @@
     nextLifeThreshold = 100;
     upgrade.pierce = upgrade.double = upgrade.extra = upgrade.bounce = false;
     upgrade.sides = upgrade.seek = false;
-    tier1Offered = false; tier2Offered = false; tier3Offered = false;
+    tier1Offered = false; tier2Offered = false; tier3Offered = false; tier4Offered = false;
     whiteUnlocked = false;
     blackUnlocked = false;
     rebuildWeights();
