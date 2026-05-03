@@ -256,8 +256,8 @@
   let elapsed = 0;
   let lives = 5;
   let nextLifeThreshold = 100;
-  const upgrade = { pierce: false, double: false, extra: false, bounce: false, sides: false, seek: false, freeze: false };
-  const combo2 = { firebolt: false, thunderguard: false, stormbolt: false, freezeburn: false };
+  const upgrade = { pierce: false, double: false, extra: false, bounce: false, sides: false, seek: false, freeze: false, random: false };
+  const combo2 = { firebolt: false, thunderguard: false, stormbolt: false, freezeburn: false, firework: false };
   let thunderTimer = 0;
   let freezeChance = 0.05;
   let freezeActive = false;
@@ -269,6 +269,11 @@
     desc: 'Rare: every once in a while, every balloon on screen gets a frost layer that slows their movement.',
     rare: true,
   };
+  const RANDOM_UPGRADE = {
+    key: 'random', icon: '💃', name: 'Dancing Bolts',
+    desc: 'Rare: arrows dance along an unpredictable curve. Locks out Seeking Darts.',
+    rare: true, locks: 'seek',
+  };
   let tiersOffered = 0;
   function milestoneFor(tier) {
     const fixed = [100, 500, 800, 1200, 1600, 2000];
@@ -276,9 +281,10 @@
     return 2000 + (tier - 6) * 800;
   }
   function anyUpgradeAvailable() {
-    const remaining = BASE_POOL.filter(c => !upgrade[c.key]);
+    const remaining = BASE_POOL.filter(c => !upgrade[c.key] && !(upgrade.random && c.key === 'seek'));
+    const rares = (!upgrade.freeze ? 1 : 0) + ((!upgrade.random && !upgrade.seek) ? 1 : 0);
     const eligibleCombined = COMBINED.filter(c => !combo2[c.key] && c.requires.every(r => upgrade[r]));
-    return (remaining.length + eligibleCombined.length) > 0;
+    return (remaining.length + rares + eligibleCombined.length) > 0;
   }
   let orangeUnlocked = false;
   let orangeBurstTimer = 0;
@@ -298,6 +304,7 @@
     { key: 'thunderguard', icon: '⚡🛡️', name: 'Thunderguard', desc: 'Combined: side arrows are replaced by auto-bolts that fire from the bottom every few seconds.', requires: ['bounce', 'sides'] },
     { key: 'stormbolt',    icon: '⚡🎯', name: 'Storm Bolt',   desc: 'Combined: lightning bounces reach twice as far and you get twice as many bounces.', requires: ['bounce', 'seek'] },
     { key: 'freezeburn',   icon: '❄️🔥', name: 'Freezeburn',   desc: 'Combined: balloons hit but not destroyed are slowed by frost.', requires: ['freeze', 'pierce'] },
+    { key: 'firework',     icon: '🎆',   name: 'Firework Bolts', desc: 'Combined: bow shoots fireworks that explode on impact, damaging nearby balloons.', requires: ['random', 'pierce'] },
   ];
 
   const MODE_KEY = 'balloon_mode';
@@ -394,6 +401,30 @@
     });
   }
 
+  function explodeFirework(x, y, primary) {
+    const radius = 90;
+    const colors = ['#ffd166', '#ff8a1a', '#ff5722', '#fff3a3', '#ff6b9a'];
+    for (let i = 0; i < 36; i++) {
+      const a = (i / 36) * Math.PI * 2;
+      const s = 200 + Math.random() * 280;
+      particles.push({
+        x, y,
+        vx: Math.cos(a) * s,
+        vy: Math.sin(a) * s,
+        life: 0.6 + Math.random() * 0.5,
+        color: colors[Math.floor(Math.random() * colors.length)],
+        size: 2 + Math.random() * 3,
+      });
+    }
+    for (const b of balloons) {
+      if (!b.alive) continue;
+      const dx = b.x - x, dy = b.y - y;
+      if (dx * dx + dy * dy <= (radius + b.r) * (radius + b.r)) {
+        hit(b, { fire: true, bounce: false });
+      }
+    }
+  }
+
   function fireThunderBolt() {
     const live = balloons.filter(b => b.alive);
     if (!live.length) return;
@@ -454,6 +485,9 @@
         angle: a, alive: true, life: 2.8,
         fire: upgrade.pierce, bounce: upgrade.bounce, bounces: 0,
         seek: upgrade.seek,
+        random: upgrade.random,
+        firework: combo2.firework,
+        curvature: upgrade.random ? (Math.random() - 0.5) * 5 : 0,
         hits: new Set(), trail: [],
       });
     }
@@ -540,15 +574,19 @@
 
   function offerUpgrade(tier) {
     running = false;
-    const unowned = BASE_POOL.filter(c => !upgrade[c.key]);
+    const unowned = BASE_POOL.filter(c => !upgrade[c.key] && !(upgrade.random && c.key === 'seek'));
     for (let i = unowned.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [unowned[i], unowned[j]] = [unowned[j], unowned[i]];
     }
     const base = unowned.slice(0, Math.min(2, unowned.length));
-    if (!upgrade.freeze && base.length > 0 && Math.random() < freezeChance) {
+    const availableRares = [];
+    if (!upgrade.freeze) availableRares.push(FREEZE_UPGRADE);
+    if (!upgrade.random && !upgrade.seek) availableRares.push(RANDOM_UPGRADE);
+    if (availableRares.length && base.length > 0 && Math.random() < freezeChance) {
+      const rare = availableRares[Math.floor(Math.random() * availableRares.length)];
       const idx = Math.floor(Math.random() * base.length);
-      base[idx] = FREEZE_UPGRADE;
+      base[idx] = rare;
     }
     const eligibleCombined = COMBINED
       .filter(c => !combo2[c.key] && c.requires.every(r => upgrade[r]))
@@ -583,7 +621,8 @@
       upgrade[key] = true;
       if (key === 'freeze') freezeCooldown = 6;
     }
-    if (!upgrade.freeze) freezeChance = Math.min(1.0, freezeChance + 0.05);
+    const raresLeft = !upgrade.freeze || (!upgrade.random && !upgrade.seek);
+    if (raresLeft) freezeChance = Math.min(1.0, freezeChance + 0.05);
     upgradeOverlay.classList.add('hidden');
     running = true;
     last = 0;
@@ -699,6 +738,14 @@
     if (freezeFlash > 0) freezeFlash = Math.max(0, freezeFlash - dt * 1.6);
 
     for (const a of arrows) {
+      if (a.random && !a.thunder) {
+        a.curvature += (Math.random() - 0.5) * 14 * dt;
+        a.curvature = Math.max(-7, Math.min(7, a.curvature));
+        const sp = Math.hypot(a.vx, a.vy);
+        const ang = Math.atan2(a.vy, a.vx) + a.curvature * dt;
+        a.vx = Math.cos(ang) * sp;
+        a.vy = Math.sin(ang) * sp;
+      }
       if (a.seek && balloons.length) {
         let nearest = null, nd = Infinity;
         for (const b of balloons) {
@@ -753,9 +800,14 @@
         if (a.hits.has(b)) continue;
         const dx = a.x - b.x, dy = a.y - b.y;
         if (dx * dx + dy * dy < (b.r + 4) * (b.r + 4)) {
-          hit(b, a);
-          a.hits.add(b);
-          if (!a.fire) a.alive = false;
+          if (a.firework) {
+            explodeFirework(a.x, a.y, b);
+            a.alive = false;
+          } else {
+            hit(b, a);
+            a.hits.add(b);
+            if (!a.fire) a.alive = false;
+          }
         }
       }
     }
@@ -925,6 +977,27 @@
   }
 
   function drawArrow(a) {
+    if (a.firework) {
+      ctx.save();
+      ctx.translate(a.x, a.y);
+      const flicker = 0.7 + Math.random() * 0.3;
+      ctx.globalAlpha = flicker;
+      ctx.fillStyle = '#ffe26d';
+      ctx.beginPath();
+      ctx.arc(0, 0, 6, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#ff6b9a';
+      ctx.beginPath();
+      ctx.arc(-Math.cos(a.angle) * 6, -Math.sin(a.angle) * 6, 4, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#fff3a3';
+      ctx.beginPath();
+      ctx.arc(0, 0, 2.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+      ctx.restore();
+      return;
+    }
     if ((a.bounce || a.thunder) && a.trail.length > 1) {
       ctx.save();
       ctx.strokeStyle = 'rgba(140,200,255,0.85)';
@@ -1165,8 +1238,8 @@
     spawnTimer = 0.5; spawnInterval = 1.1; lives = 5;
     nextLifeThreshold = 100;
     upgrade.pierce = upgrade.double = upgrade.extra = upgrade.bounce = false;
-    upgrade.sides = upgrade.seek = upgrade.freeze = false;
-    combo2.firebolt = combo2.thunderguard = combo2.stormbolt = combo2.freezeburn = false;
+    upgrade.sides = upgrade.seek = upgrade.freeze = upgrade.random = false;
+    combo2.firebolt = combo2.thunderguard = combo2.stormbolt = combo2.freezeburn = combo2.firework = false;
     thunderTimer = 0;
     freezeChance = 0.05;
     freezeActive = false;
