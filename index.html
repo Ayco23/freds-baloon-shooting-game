@@ -245,11 +245,14 @@
   let lives = 5;
   let nextLifeThreshold = 100;
   const upgrade = { pierce: false, double: false, extra: false, bounce: false, sides: false, seek: false };
+  const combo2 = { firebolt: false, thunderguard: false, stormbolt: false };
+  let thunderTimer = 0;
   let tier1Offered = false;
   let tier2Offered = false;
   let tier3Offered = false;
   let tier4Offered = false;
   let tier5Offered = false;
+  let tier6Offered = false;
   let orangeUnlocked = false;
   let orangeBurstTimer = 0;
   let orangeQueue = [];
@@ -362,6 +365,26 @@
     });
   }
 
+  function fireThunderBolt() {
+    const candidates = balloons.filter(b => b.alive);
+    if (!candidates.length) return;
+    const target = candidates[Math.floor(Math.random() * candidates.length)];
+    const x = 30 + Math.random() * (W - 60);
+    const y = H + 10;
+    const dx = target.x - x, dy = target.y - y;
+    const d = Math.hypot(dx, dy) || 1;
+    const speed = 850;
+    arrows.push({
+      x, y,
+      vx: dx / d * speed,
+      vy: dy / d * speed,
+      angle: Math.atan2(dy, dx), alive: true, life: 1.6,
+      fire: false, bounce: false, bounces: 0,
+      seek: true, thunder: true,
+      hits: new Set(), trail: [],
+    });
+  }
+
   function scheduleOrangeBurst() {
     const count = 2 + Math.floor(Math.random() * 4);
     const side = Math.random() < 0.5 ? 'left' : 'right';
@@ -400,7 +423,7 @@
         hits: new Set(), trail: [],
       });
     }
-    if (upgrade.sides) {
+    if (upgrade.sides && !combo2.thunderguard) {
       const sideSpeed = speed * 0.7;
       for (const off of [-Math.PI / 2, Math.PI / 2]) {
         const a = angle + off;
@@ -417,12 +440,13 @@
     }
   }
 
-  function hit(b) {
-    b.hp -= 1;
+  function hit(b, a) {
+    const dmg = (a && combo2.firebolt && a.fire && a.bounce && b.hp > 1) ? 2 : 1;
+    b.hp -= dmg;
     if (b.hp > 0) {
       const c = COLORS[b.color];
       b.hitFlash = 0.25;
-      if (b.color === 'white') b.r = Math.max(10, b.r - 5);
+      if (b.color === 'white') b.r = Math.max(10, b.r - 5 * dmg);
       spawnParticles(b.x, b.y, c.shine, b.color === 'white' ? 14 : 8);
       const text = b.color === 'white' ? 'peel!' : 'crack!';
       popups.push({ x: b.x, y: b.y - b.r, text, color: '#ffffff', life: 0.6, vy: -30 });
@@ -483,6 +507,9 @@
       } else if (!tier5Offered && score >= 1600) {
         tier5Offered = true;
         offerUpgrade(5);
+      } else if (!tier6Offered && score >= 2000) {
+        tier6Offered = true;
+        offerUpgrade(6);
       }
     }
   }
@@ -502,7 +529,7 @@
       running = true; last = 0;
       return;
     }
-    const milestone = tier === 1 ? '100' : tier === 2 ? '500' : tier === 3 ? '800' : tier === 4 ? '1200' : '1600';
+    const milestone = tier === 1 ? '100' : tier === 2 ? '500' : tier === 3 ? '800' : tier === 4 ? '1200' : tier === 5 ? '1600' : '2000';
     upgradeTitleEl.textContent = milestone + ' points reached!';
     upgradeSubtitleEl.textContent = 'Pick another perk for the rest of this run.';
     upgradeChoicesEl.innerHTML = '';
@@ -522,9 +549,26 @@
 
   function chooseUpgrade(key) {
     upgrade[key] = true;
+    checkCombinedUpgrades();
     upgradeOverlay.classList.add('hidden');
     running = true;
     last = 0;
+  }
+
+  function checkCombinedUpgrades() {
+    if (!combo2.firebolt && upgrade.pierce && upgrade.bounce) {
+      combo2.firebolt = true;
+      popups.push({ x: W / 2, y: H / 2 + 30, text: 'COMBINED: FIREBOLT', color: '#ff8a1a', life: 2.0, vy: -10 });
+    }
+    if (!combo2.thunderguard && upgrade.bounce && upgrade.sides) {
+      combo2.thunderguard = true;
+      thunderTimer = 4;
+      popups.push({ x: W / 2, y: H / 2 + 30, text: 'COMBINED: THUNDERGUARD', color: '#8cd0ff', life: 2.0, vy: -10 });
+    }
+    if (!combo2.stormbolt && upgrade.bounce && upgrade.seek) {
+      combo2.stormbolt = true;
+      popups.push({ x: W / 2, y: H / 2 + 30, text: 'COMBINED: STORM BOLT', color: '#cfa8ff', life: 2.0, vy: -10 });
+    }
   }
 
   function escape(b) {
@@ -607,6 +651,14 @@
       }
     }
 
+    if (combo2.thunderguard) {
+      thunderTimer -= dt;
+      if (thunderTimer <= 0) {
+        fireThunderBolt();
+        thunderTimer = 2.2 + Math.random() * 1.4;
+      }
+    }
+
     for (const a of arrows) {
       if (a.seek && balloons.length) {
         let nearest = null, nd = Infinity;
@@ -634,7 +686,11 @@
       a.x += dx;
       a.y += dy;
       if (a.bounce) a.dist = (a.dist || 0) + Math.hypot(dx, dy);
-      a.vy += (a.bounce ? 120 : a.seek ? 60 : 380) * dt;
+      a.vy += (a.bounce ? 120 : a.thunder ? 0 : a.seek ? 60 : 380) * dt;
+      if (a.thunder) {
+        a.trail.push({ x: a.x, y: a.y });
+        if (a.trail.length > 10) a.trail.shift();
+      }
       if (a.bounce) {
         a.trail.push({ x: a.x, y: a.y });
         if (a.trail.length > 10) a.trail.shift();
@@ -645,10 +701,10 @@
         if (bounced) {
           a.bounces++;
           a.hits = new Set();
-          a.dieAtDist = a.dist * 1.2;
+          a.dieAtDist = a.dist * (combo2.stormbolt ? 1.4 : 1.2);
         }
         if (a.dieAtDist && a.dist >= a.dieAtDist) a.alive = false;
-        if (a.bounces > 5) a.alive = false;
+        if (a.bounces > (combo2.stormbolt ? 10 : 5)) a.alive = false;
       }
       a.angle = Math.atan2(a.vy, a.vx);
       a.life -= dt;
@@ -658,7 +714,7 @@
         if (a.hits.has(b)) continue;
         const dx = a.x - b.x, dy = a.y - b.y;
         if (dx * dx + dy * dy < (b.r + 4) * (b.r + 4)) {
-          hit(b);
+          hit(b, a);
           a.hits.add(b);
           if (!a.fire) a.alive = false;
         }
@@ -707,6 +763,7 @@
     if (settings.upgrades) all.push({ at: 800, name: 'Upgrade 3', done: () => tier3Offered });
     if (settings.upgrades) all.push({ at: 1200, name: 'Upgrade 4', done: () => tier4Offered });
     if (settings.upgrades) all.push({ at: 1600, name: 'Upgrade 5', done: () => tier5Offered });
+    if (settings.upgrades) all.push({ at: 2000, name: 'Upgrade 6', done: () => tier6Offered });
     all.sort((a, b) => a.at - b.at);
     const next = all.find(m => !m.done());
     if (!next) {
@@ -831,7 +888,7 @@
   }
 
   function drawArrow(a) {
-    if (a.bounce && a.trail.length > 1) {
+    if ((a.bounce || a.thunder) && a.trail.length > 1) {
       ctx.save();
       ctx.strokeStyle = 'rgba(140,200,255,0.85)';
       ctx.lineWidth = 3;
@@ -1055,7 +1112,9 @@
     nextLifeThreshold = 100;
     upgrade.pierce = upgrade.double = upgrade.extra = upgrade.bounce = false;
     upgrade.sides = upgrade.seek = false;
-    tier1Offered = false; tier2Offered = false; tier3Offered = false; tier4Offered = false; tier5Offered = false;
+    combo2.firebolt = combo2.thunderguard = combo2.stormbolt = false;
+    thunderTimer = 0;
+    tier1Offered = false; tier2Offered = false; tier3Offered = false; tier4Offered = false; tier5Offered = false; tier6Offered = false;
     whiteUnlocked = false;
     blackUnlocked = false;
     orangeUnlocked = false;
