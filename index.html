@@ -44,6 +44,7 @@
   .purple { background: radial-gradient(circle at 35% 30%, #f1d6ff, #a64bff 60%, #4b148f); }
   .black  { background: radial-gradient(circle at 35% 30%, #6b6b6b, #2a2a2a 60%, #050505); }
   .white  { background: radial-gradient(circle at 35% 30%, #ffffff, #e8e8e8 60%, #b3b3b3); }
+  .orange { background: radial-gradient(circle at 35% 30%, #ffd9a8, #ff8a1a 60%, #a14b00); }
   button {
     margin-top: 18px; font-size: 18px; font-weight: 700; padding: 14px 28px;
     border: none; border-radius: 999px; color: #0b1d3a;
@@ -139,6 +140,7 @@
     <div><span class="swatch green"></span><span>Green · 5</span></div>
     <div><span class="swatch black"></span><span>Black · 30 (2 hits, 250+)</span></div>
     <div><span class="swatch white"></span><span>White · 60 (4 hits, 625+)</span></div>
+    <div><span class="swatch orange"></span><span>Orange · 25 (side bursts, 1400+)</span></div>
     <div><span class="swatch purple"></span><span>Purple · +1 ❤</span></div>
   </div>
   <p>Drag anywhere on the screen to aim your bow.<br/>Release to fire an arrow.</p>
@@ -211,6 +213,7 @@
     green:  { fill: '#3fbf52', stroke: '#1f6b2a', shine: '#d4f5cf', points: 5,  weight: 6, hp: 1 },
     black:  { fill: '#2a2a2a', stroke: '#050505', shine: '#6b6b6b', points: 30, weight: 2, hp: 2 },
     white:  { fill: '#ffffff', stroke: '#9aa0a6', shine: '#f3f6ff', points: 60, weight: 3, hp: 4 },
+    orange: { fill: '#ff8a1a', stroke: '#a14b00', shine: '#ffd9a8', points: 25, weight: 0, hp: 1 },
     purple: { fill: '#a64bff', stroke: '#4b148f', shine: '#f1d6ff', points: 0,  weight: 0, hp: 1, life: 1 },
   };
   let WEIGHTED = [];
@@ -246,6 +249,10 @@
   let tier2Offered = false;
   let tier3Offered = false;
   let tier4Offered = false;
+  let tier5Offered = false;
+  let orangeUnlocked = false;
+  let orangeBurstTimer = 0;
+  let orangeQueue = [];
   const MAX_LIVES = 9;
 
   const TIER1 = [
@@ -264,8 +271,8 @@
   const MODE_KEY = 'balloon_mode';
   let mode = localStorage.getItem(MODE_KEY) === 'modded' ? 'modded' : 'original';
   const MODE_FLAGS = {
-    original: { black: false, white: false, purple: true, upgrades: false },
-    modded:   { black: true,  white: true,  purple: true, upgrades: true  },
+    original: { black: false, white: false, orange: false, purple: true, upgrades: false },
+    modded:   { black: true,  white: true,  orange: true,  purple: true, upgrades: true  },
   };
   const settings = Object.assign({}, MODE_FLAGS[mode]);
   const BEST_KEYS = { original: 'balloon_best_original', modded: 'balloon_best_modded' };
@@ -340,6 +347,32 @@
       hitFlash: 0,
       alive: true,
     });
+  }
+
+  function spawnOrange(side, y) {
+    const speed = 110 + Math.random() * 50;
+    const r = 22;
+    const x = side === 'left' ? -r - 10 : W + r + 10;
+    balloons.push({
+      x, y, baseX: x, r, color: 'orange',
+      vx: side === 'left' ? speed : -speed, vy: 0,
+      sway: 0, swaySpeed: 0, swayAmp: 0,
+      hp: 1, hitFlash: 0, alive: true, horizontal: true,
+    });
+  }
+
+  function scheduleOrangeBurst() {
+    const count = 2 + Math.floor(Math.random() * 4);
+    const side = Math.random() < 0.5 ? 'left' : 'right';
+    const baseY = H * (0.65 + Math.random() * 0.10);
+    for (let i = 0; i < count; i++) {
+      orangeQueue.push({
+        delay: i * (0.30 + Math.random() * 0.15),
+        side,
+        y: baseY + (Math.random() - 0.5) * 28,
+      });
+    }
+    orangeBurstTimer = 11 + Math.random() * 8;
   }
 
   function shootArrow(angle, power) {
@@ -428,6 +461,11 @@
       rebuildWeights();
       popups.push({ x: W / 2, y: H / 2, text: 'WHITE BALLOONS UNLOCKED', color: '#ffffff', life: 1.6, vy: -10 });
     }
+    if (settings.orange && !orangeUnlocked && score >= 1400) {
+      orangeUnlocked = true;
+      orangeBurstTimer = 3;
+      popups.push({ x: W / 2, y: H / 2, text: 'ORANGE BALLOONS INCOMING', color: '#ff8a1a', life: 1.8, vy: -10 });
+    }
     if (settings.upgrades) {
       if (!tier1Offered && score >= 100) {
         tier1Offered = true;
@@ -441,6 +479,9 @@
       } else if (!tier4Offered && score >= 1200) {
         tier4Offered = true;
         offerUpgrade(4);
+      } else if (!tier5Offered && score >= 1600) {
+        tier5Offered = true;
+        offerUpgrade(5);
       }
     }
   }
@@ -456,11 +497,11 @@
     else if (tier === 2) choices = TIER2;
     else if (tier === 3) choices = TIER3;
     else choices = [...TIER1, ...TIER2, ...TIER3].filter(c => !upgrade[c.key]);
-    if (tier === 4 && choices.length === 0) {
+    if (tier >= 4 && choices.length === 0) {
       running = true; last = 0;
       return;
     }
-    const milestone = tier === 1 ? '100' : tier === 2 ? '500' : tier === 3 ? '800' : '1200';
+    const milestone = tier === 1 ? '100' : tier === 2 ? '500' : tier === 3 ? '800' : tier === 4 ? '1200' : '1600';
     upgradeTitleEl.textContent = milestone + ' points reached!';
     upgradeSubtitleEl.textContent = 'Pick another perk for the rest of this run.';
     upgradeChoicesEl.innerHTML = '';
@@ -533,11 +574,28 @@
     }
 
     for (const b of balloons) {
-      b.sway += b.swaySpeed * dt;
-      b.x = b.baseX + Math.sin(b.sway) * b.swayAmp;
-      b.y += b.vy * dt;
       if (b.hitFlash > 0) b.hitFlash = Math.max(0, b.hitFlash - dt);
-      if (b.y - b.r <= cloudY() + 10) escape(b);
+      if (b.horizontal) {
+        b.x += b.vx * dt;
+        if ((b.vx > 0 && b.x - b.r > W + 6) || (b.vx < 0 && b.x + b.r < -6)) escape(b);
+      } else {
+        b.sway += b.swaySpeed * dt;
+        b.x = b.baseX + Math.sin(b.sway) * b.swayAmp;
+        b.y += b.vy * dt;
+        if (b.y - b.r <= cloudY() + 10) escape(b);
+      }
+    }
+
+    if (orangeUnlocked) {
+      orangeBurstTimer -= dt;
+      if (orangeBurstTimer <= 0) scheduleOrangeBurst();
+      for (let i = orangeQueue.length - 1; i >= 0; i--) {
+        orangeQueue[i].delay -= dt;
+        if (orangeQueue[i].delay <= 0) {
+          spawnOrange(orangeQueue[i].side, orangeQueue[i].y);
+          orangeQueue.splice(i, 1);
+        }
+      }
     }
 
     for (const a of arrows) {
@@ -639,6 +697,7 @@
     if (settings.upgrades) all.push({ at: 500, name: 'Upgrade 2', done: () => tier2Offered });
     if (settings.upgrades) all.push({ at: 800, name: 'Upgrade 3', done: () => tier3Offered });
     if (settings.upgrades) all.push({ at: 1200, name: 'Upgrade 4', done: () => tier4Offered });
+    if (settings.upgrades) all.push({ at: 1600, name: 'Upgrade 5', done: () => tier5Offered });
     all.sort((a, b) => a.at - b.at);
     const next = all.find(m => !m.done());
     if (!next) {
@@ -987,9 +1046,12 @@
     nextLifeThreshold = 100;
     upgrade.pierce = upgrade.double = upgrade.extra = upgrade.bounce = false;
     upgrade.sides = upgrade.seek = false;
-    tier1Offered = false; tier2Offered = false; tier3Offered = false; tier4Offered = false;
+    tier1Offered = false; tier2Offered = false; tier3Offered = false; tier4Offered = false; tier5Offered = false;
     whiteUnlocked = false;
     blackUnlocked = false;
+    orangeUnlocked = false;
+    orangeBurstTimer = 0;
+    orangeQueue = [];
     rebuildWeights();
     running = true; last = 0;
     startOverlay.classList.add('hidden');
