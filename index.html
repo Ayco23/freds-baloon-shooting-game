@@ -51,6 +51,17 @@
   }
   button:active { transform: translateY(1px); }
   .hidden { display: none !important; }
+  .choices { display: flex; gap: 14px; margin-top: 12px; flex-wrap: wrap; justify-content: center; }
+  .choice {
+    flex: 0 0 140px; padding: 16px 12px; border-radius: 16px; cursor: pointer;
+    background: rgba(255,255,255,0.08); border: 2px solid rgba(255,255,255,0.18);
+    display: flex; flex-direction: column; align-items: center; gap: 8px;
+    transition: transform 0.1s ease, background 0.1s ease;
+  }
+  .choice:active { transform: scale(0.97); background: rgba(255,255,255,0.15); }
+  .choice .icon { font-size: 30px; line-height: 1; }
+  .choice .name { font-weight: 700; font-size: 15px; }
+  .choice .desc { font-size: 12px; opacity: 0.85; line-height: 1.35; }
   #hint {
     position: absolute; bottom: env(safe-area-inset-bottom, 12px); left: 0; right: 0;
     text-align: center; color: rgba(255,255,255,0.75); font-size: 13px;
@@ -83,6 +94,23 @@
   <button id="startBtn">Start Game</button>
 </div>
 
+<div id="upgrade" class="overlay hidden">
+  <h1>Choose an upgrade</h1>
+  <p>You hit 100 points! Pick one perk for the rest of this run.</p>
+  <div class="choices">
+    <div class="choice" data-choice="pierce">
+      <div class="icon">🔥</div>
+      <div class="name">Fire Arrows</div>
+      <div class="desc">Arrows pierce through balloons — pop multiple in one shot.</div>
+    </div>
+    <div class="choice" data-choice="double">
+      <div class="icon">🏹🏹</div>
+      <div class="name">Double Shot</div>
+      <div class="desc">Each release fires two arrows in a tight spread.</div>
+    </div>
+  </div>
+</div>
+
 <div id="gameover" class="overlay hidden">
   <h1>Game Over</h1>
   <p id="finalScore">Score: 0</p>
@@ -100,6 +128,7 @@
   const hintEl = document.getElementById('hint');
   const startOverlay = document.getElementById('start');
   const overOverlay = document.getElementById('gameover');
+  const upgradeOverlay = document.getElementById('upgrade');
   const startBtn = document.getElementById('startBtn');
   const retryBtn = document.getElementById('retryBtn');
   const finalScoreEl = document.getElementById('finalScore');
@@ -150,6 +179,8 @@
   let elapsed = 0;
   let lives = 5;
   let nextLifeThreshold = 100;
+  let upgrade = 'none';
+  let upgradeOffered = false;
   const MAX_LIVES = 9;
 
   let aiming = false;
@@ -210,12 +241,17 @@
 
   function shootArrow(angle, power) {
     const speed = 700 + power * 600;
-    arrows.push({
-      x: bow.x, y: bow.y - 20,
-      vx: Math.cos(angle) * speed,
-      vy: Math.sin(angle) * speed,
-      angle, alive: true, life: 2.5,
-    });
+    const fire = upgrade === 'pierce';
+    const angles = upgrade === 'double' ? [angle - 0.09, angle + 0.09] : [angle];
+    for (const a of angles) {
+      arrows.push({
+        x: bow.x, y: bow.y - 20,
+        vx: Math.cos(a) * speed,
+        vy: Math.sin(a) * speed,
+        angle: a, alive: true, life: 2.5,
+        fire, hits: new Set(),
+      });
+    }
   }
 
   function hit(b) {
@@ -248,6 +284,22 @@
       spawnBalloon('purple');
       nextLifeThreshold += 100;
     }
+    if (!upgradeOffered && score >= 100) {
+      upgradeOffered = true;
+      offerUpgrade();
+    }
+  }
+
+  function offerUpgrade() {
+    running = false;
+    upgradeOverlay.classList.remove('hidden');
+  }
+
+  function chooseUpgrade(name) {
+    upgrade = name;
+    upgradeOverlay.classList.add('hidden');
+    running = true;
+    last = 0;
   }
 
   function escape(b) {
@@ -314,10 +366,12 @@
       if (a.x < -50 || a.x > W + 50 || a.y > H + 50 || a.life <= 0) a.alive = false;
       for (const b of balloons) {
         if (!b.alive || !a.alive) continue;
+        if (a.hits.has(b)) continue;
         const dx = a.x - b.x, dy = a.y - b.y;
         if (dx * dx + dy * dy < (b.r + 4) * (b.r + 4)) {
           hit(b);
-          a.alive = false;
+          a.hits.add(b);
+          if (!a.fire) a.alive = false;
         }
       }
     }
@@ -444,16 +498,33 @@
     ctx.save();
     ctx.translate(a.x, a.y);
     ctx.rotate(a.angle);
-    ctx.fillStyle = '#7a4a1f';
+    if (a.fire) {
+      const flicker = 0.7 + Math.random() * 0.3;
+      ctx.globalAlpha = flicker;
+      ctx.fillStyle = '#ffb347';
+      ctx.beginPath();
+      ctx.ellipse(-12, 0, 16, 6, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#ff5722';
+      ctx.beginPath();
+      ctx.ellipse(-6, 0, 12, 4, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#fff3a3';
+      ctx.beginPath();
+      ctx.ellipse(0, 0, 6, 2, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+    ctx.fillStyle = a.fire ? '#5b2a0a' : '#7a4a1f';
     ctx.fillRect(-22, -1.5, 32, 3);
-    ctx.fillStyle = '#cfd8dc';
+    ctx.fillStyle = a.fire ? '#ffd166' : '#cfd8dc';
     ctx.beginPath();
     ctx.moveTo(10, 0);
     ctx.lineTo(2, -5);
     ctx.lineTo(2, 5);
     ctx.closePath();
     ctx.fill();
-    ctx.fillStyle = '#e74c3c';
+    ctx.fillStyle = a.fire ? '#ff5722' : '#e74c3c';
     ctx.beginPath();
     ctx.moveTo(-22, 0);
     ctx.lineTo(-30, -5);
@@ -624,9 +695,11 @@
     score = 0; combo = 0; comboTimer = 0; elapsed = 0;
     spawnTimer = 0.5; spawnInterval = 1.1; lives = 5;
     nextLifeThreshold = 100;
+    upgrade = 'none'; upgradeOffered = false;
     running = true; last = 0;
     startOverlay.classList.add('hidden');
     overOverlay.classList.add('hidden');
+    upgradeOverlay.classList.add('hidden');
     hintEl.style.opacity = '1';
     requestAnimationFrame(resize);
   }
@@ -644,6 +717,9 @@
 
   startBtn.addEventListener('click', startGame);
   retryBtn.addEventListener('click', startGame);
+  for (const el of upgradeOverlay.querySelectorAll('.choice')) {
+    el.addEventListener('click', () => chooseUpgrade(el.dataset.choice));
+  }
   bestEl.textContent = 'Best: ' + best;
 })();
 </script>
