@@ -43,6 +43,7 @@
   .green  { background: radial-gradient(circle at 35% 30%, #d4f5cf, #3fbf52 60%, #1f6b2a); }
   .purple { background: radial-gradient(circle at 35% 30%, #f1d6ff, #a64bff 60%, #4b148f); }
   .black  { background: radial-gradient(circle at 35% 30%, #6b6b6b, #2a2a2a 60%, #050505); }
+  .white  { background: radial-gradient(circle at 35% 30%, #ffffff, #e8e8e8 60%, #b3b3b3); }
   button {
     margin-top: 18px; font-size: 18px; font-weight: 700; padding: 14px 28px;
     border: none; border-radius: 999px; color: #0b1d3a;
@@ -97,6 +98,23 @@
     text-align: center; color: rgba(255,255,255,0.75); font-size: 13px;
     pointer-events: none; padding: 8px;
   }
+  #progress {
+    position: absolute; top: calc(env(safe-area-inset-top, 12px) + 50px);
+    left: 16px; right: 16px; pointer-events: none;
+    color: rgba(255,255,255,0.95); font-size: 12px; font-weight: 600;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.5);
+  }
+  #progress.hidden { display: none; }
+  #progress .bar {
+    margin-top: 4px; height: 8px; border-radius: 999px;
+    background: rgba(255,255,255,0.15); overflow: hidden;
+  }
+  #progress .fill {
+    height: 100%; width: 0%;
+    background: linear-gradient(90deg, #ffe26d, #f5c518);
+    transition: width 0.15s ease;
+  }
+  #progress .label { display: flex; justify-content: space-between; }
 </style>
 </head>
 <body>
@@ -105,6 +123,10 @@
   <div id="score">Score: 0</div>
   <div id="combo"></div>
   <div id="best">Best: 0</div>
+</div>
+<div id="progress" class="hidden">
+  <div class="label"><span id="progressName">Next upgrade</span><span id="progressNums">0 / 100</span></div>
+  <div class="bar"><div class="fill" id="progressFill"></div></div>
 </div>
 <div id="hint">Drag to aim • Release to shoot</div>
 
@@ -116,6 +138,7 @@
     <div><span class="swatch blue"></span><span>Blue · 10</span></div>
     <div><span class="swatch green"></span><span>Green · 5</span></div>
     <div><span class="swatch black"></span><span>Black · 30 (2 hits)</span></div>
+    <div><span class="swatch white"></span><span>White · 60 (4 hits, 300+)</span></div>
     <div><span class="swatch purple"></span><span>Purple · +1 ❤</span></div>
   </div>
   <p>Drag anywhere on the screen to aim your bow.<br/>Release to fire an arrow.</p>
@@ -187,14 +210,17 @@
     blue:   { fill: '#2e8bff', stroke: '#144a99', shine: '#cfe6ff', points: 10, weight: 3, hp: 1 },
     green:  { fill: '#3fbf52', stroke: '#1f6b2a', shine: '#d4f5cf', points: 5,  weight: 6, hp: 1 },
     black:  { fill: '#2a2a2a', stroke: '#050505', shine: '#6b6b6b', points: 30, weight: 1, hp: 2 },
+    white:  { fill: '#ffffff', stroke: '#9aa0a6', shine: '#f3f6ff', points: 60, weight: 1, hp: 4 },
     purple: { fill: '#a64bff', stroke: '#4b148f', shine: '#f1d6ff', points: 0,  weight: 0, hp: 1, life: 1 },
   };
   let WEIGHTED = [];
+  let whiteUnlocked = false;
   function rebuildWeights() {
     WEIGHTED = [];
     for (const k of Object.keys(COLORS)) {
       if (k === 'purple') continue;
       if (k === 'black' && !settings.black) continue;
+      if (k === 'white' && (!settings.white || !whiteUnlocked)) continue;
       for (let i = 0; i < COLORS[k].weight; i++) WEIGHTED.push(k);
     }
   }
@@ -231,8 +257,8 @@
   const MODE_KEY = 'balloon_mode';
   let mode = localStorage.getItem(MODE_KEY) === 'modded' ? 'modded' : 'original';
   const MODE_FLAGS = {
-    original: { black: false, purple: true, upgrades: false },
-    modded:   { black: true,  purple: true, upgrades: true  },
+    original: { black: false, white: false, purple: true, upgrades: false },
+    modded:   { black: true,  white: true,  purple: true, upgrades: true  },
   };
   const settings = Object.assign({}, MODE_FLAGS[mode]);
   const BEST_KEYS = { original: 'balloon_best_original', modded: 'balloon_best_modded' };
@@ -285,6 +311,7 @@
             : key === 'blue' ? 24
             : key === 'purple' ? 22
             : key === 'black' ? 28
+            : key === 'white' ? 32
             : 26;
     const x = 30 + Math.random() * (W - 60);
     const y = H + r + 30;
@@ -293,6 +320,7 @@
                    : key === 'blue' ? 1.1
                    : key === 'purple' ? 1.25
                    : key === 'black' ? 0.85
+                   : key === 'white' ? 0.75
                    : 0.9;
     const speed = baseSpeed * speedMul + Math.random() * 20;
     balloons.push({
@@ -337,8 +365,10 @@
     if (b.hp > 0) {
       const c = COLORS[b.color];
       b.hitFlash = 0.25;
-      spawnParticles(b.x, b.y, c.shine, 8);
-      popups.push({ x: b.x, y: b.y - b.r, text: 'crack!', color: '#ffffff', life: 0.6, vy: -30 });
+      if (b.color === 'white') b.r = Math.max(10, b.r - 5);
+      spawnParticles(b.x, b.y, c.shine, b.color === 'white' ? 14 : 8);
+      const text = b.color === 'white' ? 'peel!' : 'crack!';
+      popups.push({ x: b.x, y: b.y - b.r, text, color: '#ffffff', life: 0.6, vy: -30 });
       return;
     }
     pop(b);
@@ -361,6 +391,11 @@
     while (score >= nextLifeThreshold) {
       if (settings.purple) spawnBalloon('purple');
       nextLifeThreshold += 100;
+    }
+    if (settings.white && !whiteUnlocked && score >= 300) {
+      whiteUnlocked = true;
+      rebuildWeights();
+      popups.push({ x: W / 2, y: H / 2, text: 'WHITE BALLOONS UNLOCKED', color: '#ffffff', life: 1.6, vy: -10 });
     }
     if (settings.upgrades) {
       if (!tier1Offered && score >= 100) {
@@ -519,6 +554,36 @@
     } else {
       comboEl.textContent = '';
     }
+    updateProgress();
+  }
+
+  const progressEl = document.getElementById('progress');
+  const progressNameEl = document.getElementById('progressName');
+  const progressNumsEl = document.getElementById('progressNums');
+  const progressFillEl = document.getElementById('progressFill');
+  function updateProgress() {
+    if (mode !== 'modded') {
+      progressEl.classList.add('hidden');
+      return;
+    }
+    const all = [];
+    if (settings.upgrades) all.push({ at: 100, name: 'Upgrade 1', done: () => tier1Offered });
+    if (settings.white)    all.push({ at: 300, name: 'White unlock', done: () => whiteUnlocked });
+    if (settings.upgrades) all.push({ at: 500, name: 'Upgrade 2', done: () => tier2Offered });
+    all.sort((a, b) => a.at - b.at);
+    const next = all.find(m => !m.done());
+    if (!next) {
+      progressEl.classList.add('hidden');
+      return;
+    }
+    const prevDone = [...all].reverse().find(m => m.at < next.at && m.done());
+    const from = prevDone ? prevDone.at : 0;
+    const to = next.at;
+    const cur = Math.max(0, Math.min(to - from, score - from));
+    progressEl.classList.remove('hidden');
+    progressNameEl.textContent = next.name;
+    progressNumsEl.textContent = cur + ' / ' + (to - from);
+    progressFillEl.style.width = (cur / (to - from) * 100) + '%';
   }
 
   function drawSky() {
@@ -601,6 +666,21 @@
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText('×2', 0, 1);
+    }
+    if (b.color === 'white') {
+      ctx.strokeStyle = 'rgba(120,130,150,0.55)';
+      ctx.lineWidth = 1;
+      for (let i = 1; i <= b.hp; i++) {
+        const f = i / 5;
+        ctx.beginPath();
+        ctx.ellipse(0, 0, b.r * 0.95 * f, b.r * 1.15 * f, 0, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      ctx.fillStyle = 'rgba(60,70,90,0.85)';
+      ctx.font = 'bold 13px -apple-system, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('×' + b.hp, 0, 1);
     }
     if (b.hitFlash > 0) {
       ctx.globalAlpha = Math.min(1, b.hitFlash * 4);
@@ -839,6 +919,7 @@
     nextLifeThreshold = 100;
     upgrade.pierce = upgrade.double = upgrade.extra = upgrade.bounce = false;
     tier1Offered = false; tier2Offered = false;
+    whiteUnlocked = false;
     running = true; last = 0;
     startOverlay.classList.add('hidden');
     overOverlay.classList.add('hidden');
@@ -855,6 +936,7 @@
     finalScoreEl.textContent = 'Score: ' + score + ' (' + (mode === 'modded' ? 'Modded' : 'Original') + ')';
     finalBestEl.textContent = 'Best: ' + newBest;
     overOverlay.classList.remove('hidden');
+    progressEl.classList.add('hidden');
   }
 
   startBtn.addEventListener('click', startGame);
