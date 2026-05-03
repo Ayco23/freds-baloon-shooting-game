@@ -514,7 +514,7 @@
         seek: upgrade.seek,
         random: upgrade.random,
         firework: combo2.firework,
-        curvature: upgrade.random ? (Math.random() - 0.5) * 5 : 0,
+        curvature: upgrade.random ? (Math.random() - 0.5) * 3 : 0,
         hits: new Set(), trail: [],
       });
     }
@@ -804,8 +804,8 @@
 
     for (const a of arrows) {
       if (a.random && !a.thunder) {
-        a.curvature += (Math.random() - 0.5) * 14 * dt;
-        a.curvature = Math.max(-7, Math.min(7, a.curvature));
+        a.curvature += (Math.random() - 0.5) * 8 * dt;
+        a.curvature = Math.max(-4, Math.min(4, a.curvature));
         const sp = Math.hypot(a.vx, a.vy);
         const ang = Math.atan2(a.vy, a.vx) + a.curvature * dt;
         a.vx = Math.cos(ang) * sp;
