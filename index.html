@@ -240,9 +240,10 @@
   let elapsed = 0;
   let lives = 5;
   let nextLifeThreshold = 100;
-  const upgrade = { pierce: false, double: false, extra: false, bounce: false };
+  const upgrade = { pierce: false, double: false, extra: false, bounce: false, sides: false, seek: false };
   let tier1Offered = false;
   let tier2Offered = false;
+  let tier3Offered = false;
   const MAX_LIVES = 9;
 
   const TIER1 = [
@@ -252,6 +253,10 @@
   const TIER2 = [
     { key: 'extra', icon: '➕🏹', name: 'Extra Arrow', desc: 'Adds one more arrow to every shot, stacks with Double Shot.' },
     { key: 'bounce', icon: '⚡', name: 'Lightning Bounce', desc: 'Arrows ricochet off the walls and ceiling.' },
+  ];
+  const TIER3 = [
+    { key: 'sides', icon: '↔️', name: 'Side Arrows', desc: 'Each shot also fires two short-range arrows to the sides.' },
+    { key: 'seek', icon: '🎯', name: 'Seeking Darts', desc: 'Arrows gently steer toward the nearest balloon.' },
   ];
 
   const MODE_KEY = 'balloon_mode';
@@ -355,8 +360,24 @@
         vy: Math.sin(a) * speed,
         angle: a, alive: true, life: 2.8,
         fire: upgrade.pierce, bounce: upgrade.bounce, bounces: 0,
+        seek: upgrade.seek,
         hits: new Set(), trail: [],
       });
+    }
+    if (upgrade.sides) {
+      const sideSpeed = speed * 0.7;
+      for (const off of [-Math.PI / 2, Math.PI / 2]) {
+        const a = angle + off;
+        arrows.push({
+          x: bow.x, y: bow.y - 20,
+          vx: Math.cos(a) * sideSpeed,
+          vy: Math.sin(a) * sideSpeed,
+          angle: a, alive: true, life: 0.45,
+          fire: upgrade.pierce, bounce: false, bounces: 0,
+          seek: false, side: true,
+          hits: new Set(), trail: [],
+        });
+      }
     }
   }
 
@@ -404,6 +425,9 @@
       } else if (!tier2Offered && score >= 500) {
         tier2Offered = true;
         offerUpgrade(2);
+      } else if (!tier3Offered && score >= 800) {
+        tier3Offered = true;
+        offerUpgrade(3);
       }
     }
   }
@@ -414,8 +438,9 @@
 
   function offerUpgrade(tier) {
     running = false;
-    const choices = tier === 1 ? TIER1 : TIER2;
-    upgradeTitleEl.textContent = tier === 1 ? '100 points reached!' : '500 points reached!';
+    const choices = tier === 1 ? TIER1 : tier === 2 ? TIER2 : TIER3;
+    const milestone = tier === 1 ? '100' : tier === 2 ? '500' : '800';
+    upgradeTitleEl.textContent = milestone + ' points reached!';
     upgradeSubtitleEl.textContent = 'Pick another perk for the rest of this run.';
     upgradeChoicesEl.innerHTML = '';
     for (const c of choices) {
@@ -495,11 +520,33 @@
     }
 
     for (const a of arrows) {
+      if (a.seek && balloons.length) {
+        let nearest = null, nd = Infinity;
+        for (const b of balloons) {
+          if (!b.alive || a.hits.has(b)) continue;
+          const ddx = b.x - a.x, ddy = b.y - a.y;
+          const d2 = ddx * ddx + ddy * ddy;
+          if (d2 < nd) { nd = d2; nearest = b; }
+        }
+        if (nearest) {
+          const sp = Math.hypot(a.vx, a.vy);
+          const tx = nearest.x - a.x, ty = nearest.y - a.y;
+          const td = Math.hypot(tx, ty) || 1;
+          const desiredVx = (tx / td) * sp;
+          const desiredVy = (ty / td) * sp;
+          const k = 4.5 * dt;
+          a.vx += (desiredVx - a.vx) * k;
+          a.vy += (desiredVy - a.vy) * k;
+          const nsp = Math.hypot(a.vx, a.vy) || 1;
+          a.vx = a.vx / nsp * sp;
+          a.vy = a.vy / nsp * sp;
+        }
+      }
       const dx = a.vx * dt, dy = a.vy * dt;
       a.x += dx;
       a.y += dy;
       if (a.bounce) a.dist = (a.dist || 0) + Math.hypot(dx, dy);
-      a.vy += (a.bounce ? 120 : 380) * dt;
+      a.vy += (a.bounce ? 120 : a.seek ? 60 : 380) * dt;
       if (a.bounce) {
         a.trail.push({ x: a.x, y: a.y });
         if (a.trail.length > 10) a.trail.shift();
@@ -570,6 +617,7 @@
     if (settings.upgrades) all.push({ at: 100, name: 'Upgrade 1', done: () => tier1Offered });
     if (settings.white)    all.push({ at: 300, name: 'White unlock', done: () => whiteUnlocked });
     if (settings.upgrades) all.push({ at: 500, name: 'Upgrade 2', done: () => tier2Offered });
+    if (settings.upgrades) all.push({ at: 800, name: 'Upgrade 3', done: () => tier3Offered });
     all.sort((a, b) => a.at - b.at);
     const next = all.find(m => !m.done());
     if (!next) {
@@ -918,7 +966,8 @@
     spawnTimer = 0.5; spawnInterval = 1.1; lives = 5;
     nextLifeThreshold = 100;
     upgrade.pierce = upgrade.double = upgrade.extra = upgrade.bounce = false;
-    tier1Offered = false; tier2Offered = false;
+    upgrade.sides = upgrade.seek = false;
+    tier1Offered = false; tier2Offered = false; tier3Offered = false;
     whiteUnlocked = false;
     running = true; last = 0;
     startOverlay.classList.add('hidden');
