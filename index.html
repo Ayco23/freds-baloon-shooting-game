@@ -62,7 +62,18 @@
   .choice .icon { font-size: 30px; line-height: 1; }
   .choice .name { font-weight: 700; font-size: 15px; }
   .choice .desc { font-size: 12px; opacity: 0.85; line-height: 1.35; }
-  .settings { display: flex; flex-direction: column; gap: 10px; margin: 14px 0 4px; width: 260px; }
+  .settings { display: flex; flex-direction: column; gap: 10px; margin: 14px 0 4px; width: 280px; }
+  .modes { display: flex; gap: 10px; width: 280px; margin: 14px 0 4px; }
+  .mode {
+    flex: 1; padding: 14px 10px; border-radius: 14px; cursor: pointer; user-select: none;
+    background: rgba(255,255,255,0.08); border: 2px solid rgba(255,255,255,0.18);
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+    transition: background 0.15s, border-color 0.15s, transform 0.1s;
+  }
+  .mode:active { transform: scale(0.97); }
+  .mode .mname { font-weight: 700; font-size: 15px; }
+  .mode .mdesc { font-size: 11px; opacity: 0.8; line-height: 1.3; }
+  .mode.selected { background: rgba(245,197,24,0.18); border-color: #f5c518; }
   .toggle {
     display: flex; justify-content: space-between; align-items: center;
     padding: 10px 14px; border-radius: 12px;
@@ -110,10 +121,15 @@
   <p>Drag anywhere on the screen to aim your bow.<br/>Release to fire an arrow.</p>
   <p>If a balloon escapes into the clouds, you lose its points!</p>
   <p>Balloons speed up the longer you survive — pick your shots!</p>
-  <div class="settings">
-    <div class="toggle on" data-setting="black"><span class="label">Black balloons</span><span class="switch"></span></div>
-    <div class="toggle on" data-setting="purple"><span class="label">Purple balloons</span><span class="switch"></span></div>
-    <div class="toggle on" data-setting="upgrades"><span class="label">Upgrades at 100 pts</span><span class="switch"></span></div>
+  <div class="modes">
+    <div class="mode" data-mode="original">
+      <div class="mname">Original</div>
+      <div class="mdesc">Gold, blue, green &amp; purple life balloons.</div>
+    </div>
+    <div class="mode" data-mode="modded">
+      <div class="mname">Modded</div>
+      <div class="mdesc">Adds black balloons + upgrade picks at 100 &amp; 500 pts.</div>
+    </div>
   </div>
   <button id="startBtn">Start Game</button>
 </div>
@@ -190,7 +206,6 @@
   let clouds = [];
 
   let score = 0;
-  let best = parseInt(localStorage.getItem('balloon_best') || '0', 10);
   let combo = 0;
   let comboTimer = 0;
   let running = false;
@@ -213,18 +228,27 @@
     { key: 'bounce', icon: '⚡', name: 'Lightning Bounce', desc: 'Arrows ricochet off the walls and ceiling.' },
   ];
 
-  const SETTINGS_KEY = 'balloon_settings';
-  const settings = Object.assign(
-    { black: true, purple: true, upgrades: true },
-    JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}')
-  );
-  function saveSettings() {
-    localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
-  }
-  function applySettingsToUI() {
-    for (const t of document.querySelectorAll('#start .toggle')) {
-      t.classList.toggle('on', !!settings[t.dataset.setting]);
+  const MODE_KEY = 'balloon_mode';
+  let mode = localStorage.getItem(MODE_KEY) === 'modded' ? 'modded' : 'original';
+  const MODE_FLAGS = {
+    original: { black: false, purple: true, upgrades: false },
+    modded:   { black: true,  purple: true, upgrades: true  },
+  };
+  const settings = Object.assign({}, MODE_FLAGS[mode]);
+  const BEST_KEYS = { original: 'balloon_best_original', modded: 'balloon_best_modded' };
+  function getBest(m) { return parseInt(localStorage.getItem(BEST_KEYS[m]) || '0', 10); }
+  function setBest(m, v) { localStorage.setItem(BEST_KEYS[m], String(v)); }
+  function applyModeUI() {
+    for (const el of document.querySelectorAll('#start .mode')) {
+      el.classList.toggle('selected', el.dataset.mode === mode);
     }
+    bestEl.textContent = 'Best: ' + getBest(mode);
+  }
+  function setMode(m) {
+    mode = m;
+    localStorage.setItem(MODE_KEY, m);
+    Object.assign(settings, MODE_FLAGS[m]);
+    applyModeUI();
   }
 
   let aiming = false;
@@ -489,7 +513,7 @@
     popups = popups.filter(p => p.life > 0);
 
     scoreEl.textContent = 'Score: ' + score + '  ❤'.repeat(Math.max(0, lives));
-    bestEl.textContent = 'Best: ' + Math.max(best, score);
+    bestEl.textContent = 'Best: ' + Math.max(getBest(mode), score);
     if (combo >= 2) {
       comboEl.textContent = 'Combo x' + combo;
     } else {
@@ -825,27 +849,20 @@
 
   function endGame() {
     running = false;
-    if (score > best) {
-      best = score;
-      localStorage.setItem('balloon_best', String(best));
-    }
-    finalScoreEl.textContent = 'Score: ' + score;
-    finalBestEl.textContent = 'Best: ' + best;
+    const prevBest = getBest(mode);
+    if (score > prevBest) setBest(mode, score);
+    const newBest = Math.max(prevBest, score);
+    finalScoreEl.textContent = 'Score: ' + score + ' (' + (mode === 'modded' ? 'Modded' : 'Original') + ')';
+    finalBestEl.textContent = 'Best: ' + newBest;
     overOverlay.classList.remove('hidden');
   }
 
   startBtn.addEventListener('click', startGame);
   retryBtn.addEventListener('click', startGame);
-  for (const t of document.querySelectorAll('#start .toggle')) {
-    t.addEventListener('click', () => {
-      const key = t.dataset.setting;
-      settings[key] = !settings[key];
-      t.classList.toggle('on', settings[key]);
-      saveSettings();
-    });
+  for (const el of document.querySelectorAll('#start .mode')) {
+    el.addEventListener('click', () => setMode(el.dataset.mode));
   }
-  applySettingsToUI();
-  bestEl.textContent = 'Best: ' + best;
+  applyModeUI();
 })();
 </script>
 </body>
