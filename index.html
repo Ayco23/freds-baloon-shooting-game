@@ -150,9 +150,9 @@
     <div><span class="swatch gold"></span><span>Gold · 20</span></div>
     <div><span class="swatch blue"></span><span>Blue · 10</span></div>
     <div><span class="swatch green"></span><span>Green · 5</span></div>
-    <div><span class="swatch black"></span><span>Black · 30 (2 hits, 250+)</span></div>
-    <div><span class="swatch white"></span><span>White · 60 (4 hits, 625+)</span></div>
-    <div><span class="swatch orange"></span><span>Orange · 25 (side bursts, 1400+)</span></div>
+    <div><span class="swatch black"></span><span>Black · 30 (2 hits, 200+)</span></div>
+    <div><span class="swatch white"></span><span>White · 60 (4 hits, 800+)</span></div>
+    <div><span class="swatch orange"></span><span>Orange · 25 (side bursts, 1300+)</span></div>
     <div><span class="swatch purple"></span><span>Purple · +1 ❤</span></div>
   </div>
   <p>Drag anywhere on the screen to aim your bow.<br/>Release to fire an arrow.</p>
@@ -261,7 +261,7 @@
   const upgrade = { pierce: false, double: false, extra: false, bounce: false, sides: false, seek: false, freeze: false, random: false };
   const combo2 = { firebolt: false, thunderguard: false, stormbolt: false, freezeburn: false, firework: false };
   let thunderTimer = 0;
-  let freezeChance = 0.05;
+  let freezeChance = 0.10;
   let freezeActive = false;
   let freezeTimer = 0;
   let freezeCooldown = 0;
@@ -278,9 +278,9 @@
   };
   let tiersOffered = 0;
   function milestoneFor(tier) {
-    const fixed = [100, 500, 800, 1200, 1600, 2000];
+    const fixed = [100, 300, 600, 1000, 1500, 2100];
     if (tier <= fixed.length) return fixed[tier - 1];
-    return 2000 + (tier - 6) * 800;
+    return 2100 + (tier - 6) * 800;
   }
   function anyUpgradeAvailable() {
     const remaining = BASE_POOL.filter(c => !upgrade[c.key] && !(upgrade.random && c.key === 'seek'));
@@ -544,17 +544,17 @@
       if (settings.purple) {
         let chance = 1.0;
         if (nextLifeThreshold > 3000) chance = 0.05;
-        else if (nextLifeThreshold > 1000) chance = 0.15;
+        else if (nextLifeThreshold > 1200) chance = 0.15;
         if (Math.random() < chance) spawnBalloon('purple');
       }
       nextLifeThreshold += 100;
     }
-    if (settings.black && !blackUnlocked && score >= 250) {
+    if (settings.black && !blackUnlocked && score >= 200) {
       blackUnlocked = true;
       rebuildWeights();
       popups.push({ x: W / 2, y: H / 2, text: 'BLACK BALLOONS UNLOCKED', color: '#ffffff', life: 1.6, vy: -10 });
     }
-    if (settings.white && !whiteUnlocked && score >= 625) {
+    if (settings.white && !whiteUnlocked && score >= 800) {
       whiteUnlocked = true;
       rebuildWeights();
       popups.push({ x: W / 2, y: H / 2, text: 'WHITE BALLOONS UNLOCKED', color: '#ffffff', life: 1.6, vy: -10 });
@@ -563,7 +563,7 @@
       greenRemoved = true;
       rebuildWeights();
     }
-    if (settings.orange && !orangeUnlocked && score >= 1400) {
+    if (settings.orange && !orangeUnlocked && score >= 1300) {
       orangeUnlocked = true;
       orangeBurstTimer = 3;
       popups.push({ x: W / 2, y: H / 2, text: 'ORANGE BALLOONS INCOMING', color: '#ff8a1a', life: 1.8, vy: -10 });
@@ -628,7 +628,7 @@
       if (key === 'freeze') freezeCooldown = 6;
     }
     const raresLeft = !upgrade.freeze || (!upgrade.random && !upgrade.seek);
-    if (raresLeft) freezeChance = Math.min(1.0, freezeChance + 0.05);
+    if (raresLeft) freezeChance = Math.min(1.0, freezeChance + 0.08);
     upgradeOverlay.classList.add('hidden');
     running = true;
     last = 0;
@@ -1247,7 +1247,7 @@
     upgrade.sides = upgrade.seek = upgrade.freeze = upgrade.random = false;
     combo2.firebolt = combo2.thunderguard = combo2.stormbolt = combo2.freezeburn = combo2.firework = false;
     thunderTimer = 0;
-    freezeChance = 0.05;
+    freezeChance = 0.10;
     freezeActive = false;
     freezeTimer = 0;
     freezeCooldown = 0;
