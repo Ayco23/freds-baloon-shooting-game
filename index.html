@@ -414,15 +414,16 @@
     });
   }
 
-  function spawnIceFumesFromBow() {
-    for (const dir of [-1, 1]) {
+  function spawnIceFumesFromBow(angle) {
+    for (const sign of [-1, 1]) {
+      const a = angle + sign * Math.PI / 2;
       iceFumes.push({
-        x: bow.x + dir * 28,
-        y: bow.y - 10,
-        vx: dir * 320,
-        vy: -100,
-        life: 1.2,
-        r: 18,
+        x: bow.x + Math.cos(a) * 26,
+        y: bow.y + Math.sin(a) * 26,
+        vx: Math.cos(a) * 200,
+        vy: Math.sin(a) * 200,
+        life: 0.55,
+        r: 12,
       });
     }
   }
@@ -532,7 +533,7 @@
         });
       }
     }
-    if (combo2.icefumer) spawnIceFumesFromBow();
+    if (combo2.icefumer) spawnIceFumesFromBow(angle);
   }
 
   function hit(b, a) {
@@ -766,10 +767,10 @@
       const f = iceFumes[i];
       f.x += f.vx * dt;
       f.y += f.vy * dt;
-      f.vx *= Math.pow(0.4, dt);
-      f.vy *= Math.pow(0.4, dt);
+      f.vx *= Math.pow(0.2, dt);
+      f.vy *= Math.pow(0.2, dt);
       f.life -= dt;
-      f.r += 24 * dt;
+      f.r += 14 * dt;
       if (f.life <= 0) { iceFumes.splice(i, 1); continue; }
       let hitB = null;
       for (const b of balloons) {
@@ -779,7 +780,7 @@
         if (dx * dx + dy * dy < rr * rr) { hitB = b; break; }
       }
       if (hitB) {
-        hitB.frozen = Math.max(hitB.frozen || 0, 2.5);
+        hitB.frozen = Math.max(hitB.frozen || 0, 1.2);
         spawnParticles(f.x, f.y, '#cfeaff', 6);
         iceFumes.splice(i, 1);
       }
